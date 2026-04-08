@@ -1,0 +1,39 @@
+# 热连轧带钢浪形检测系统依赖清单
+
+# 核心包
+opencv-python==4.8.0.76
+numpy==1.24.3
+pyyaml==6.0.1
+ultralytics==8.0.196
+scikit-learn==1.3.0
+pandas==2.0.3
+matplotlib==3.7.2
+tqdm==4.65.0
+Pillow==9.5.0
+scipy==1.10.1
+
+# 可选包
+pyqt5==5.15.9  # 用于GUI界面
+requests==2.31.0  # 用于网络请求（对接PLC）
+psutil==5.9.5  # 用于系统资源监控
+
+# 开发包
+pytest==7.4.0  # 用于测试
+black==23.7.0  # 代码格式化
+flake8==6.0.0  # 代码检查
+
+# 版本锁定，确保稳定性
+
+# OpenCV 用于图像处理
+# NumPy 用于数值计算
+# PyYAML 用于配置文件解析
+# Ultralytics 用于YOLOv8目标检测
+# scikit-learn 用于机器学习算法
+# pandas 用于数据处理和CSV输出
+# matplotlib 用于可视化
+# tqdm 用于进度条
+# Pillow 用于图像处理
+# scipy 用于科学计算
+# PyQt5 用于GUI界面
+# requests 用于网络请求
+# psutil 用于系统资源监控

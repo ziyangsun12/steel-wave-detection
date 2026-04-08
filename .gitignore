@@ -1,0 +1,39 @@
+# 虚拟环境
+.venv/
+
+# 编译生成的文件
+__pycache__/
+*.pyc
+
+# 日志文件
+logs/
+
+# 输出文件
+output/
+
+# 数据文件（可选，根据需要决定是否提交）
+data/
+
+# 样例视频及识别需求
+样例视频及识别需求/
+
+# IDE配置文件
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.temp
+
+# OS生成的文件
+Thumbs.db
+.DS_Store
+
+# 打包文件
+*.zip
+*.rar
+
+# 大文件
+*.mp4
+*.avi
+*.mov
