@@ -1,227 +1,227 @@
-# 热连轧带钢浪形检测系统
+# Hot Rolling Steel Strip Wave Detection System
 
-## 项目简介
+## Project Overview
 
-热连轧带钢浪形检测系统是一个基于Python和计算机视觉的实时检测系统，用于在钢厂热连轧精轧机架间检测带钢的浪形缺陷。该系统能够从工业相机视频流中恢复带钢表面的三维动态轮廓，并自动识别和分类浪形类型，为机架间实时控制提供数据支持。
+The Hot Rolling Steel Strip Wave Detection System is a real-time detection system based on Python and computer vision, designed to detect wave defects in steel strips between finishing stands in hot rolling mills. The system can recover the 3D dynamic contour of the steel strip surface from industrial camera video streams, automatically identify and classify wave types, and provide data support for real-time control between stands.
 
-## 核心功能
+## Core Features
 
-1. **视频流接入**：支持工业相机、本地视频和文件夹读图
-2. **高温水雾预处理**：去雾、去噪、对比度增强、带钢区域分割
-3. **三维轮廓建模**：平面拟合、高度差计算、中线/边线提取
-4. **浪形检测分类器**：基于轮廓特征+YOLOv8分类，输出类别+等级
-5. **量化测量**：输出浪高、浪宽、位置（mm）
-6. **实时Pipeline**：多线程/异步，满足毫秒级指标
-7. **可视化**：实时画轮廓、标注浪形、显示测量值
-8. **日志+告警+数据上报**：CSV/JSON存结果，支持对接PLC
-9. **配置化**：相机参数、标定参数、阈值、IO路径全可配
-10. **异常处理**：断流、过曝、黑屏、无带钢自动容错
+1. **Video Stream Access**: Supports industrial cameras, local videos, and folder image reading
+2. **High-temperature Water Mist Preprocessing**: Defogging, denoising, contrast enhancement, steel strip region segmentation
+3. **3D Contour Reconstruction**: Plane fitting, height difference calculation, centerline/edge extraction
+4. **Wave Detection Classifier**: Based on contour features + YOLOv8 classification, output type + level
+5. **Quantitative Measurement**: Output wave height, width, position (mm)
+6. **Real-time Pipeline**: Multi-threading/async processing, meeting millisecond-level indicators
+7. **Visualization**: Real-time contour drawing, wave annotation, measurement value display
+8. **Logging + Alarm + Data Reporting**: CSV/JSON result storage, PLC integration support
+9. **Configuration**: Camera parameters, calibration data, thresholds, IO paths fully configurable
+10. **Exception Handling**: Automatic fault tolerance for disconnection, overexposure, black screen, no steel strip
 
-## 技术指标
+## Technical Indicators
 
-- 垂直测量误差＜2mm
-- 水平测量误差＜10mm
-- 数据输出时延＜500ms
-- 系统响应＜200ms
-- 无故障率＞99%
+- Vertical measurement error < 2mm
+- Horizontal measurement error < 10mm
+- Data output delay < 500ms
+- System response < 200ms
+- Failure rate > 99%
 
-## 项目结构
+## Project Structure
 
 ```
-├── config/           # 配置文件
-│   └── config.yaml   # 主配置文件
-├── data/             # 数据目录
-│   ├── sample_video.mp4  # 示例视频
-│   └── images/       # 示例图像
-├── logs/             # 日志目录
-├── output/           # 输出目录
-├── src/              # 核心源码
+├── config/           # Configuration files
+│   └── config.yaml   # Main configuration file
+├── data/             # Data directory
+│   ├── sample_video.mp4  # Sample video
+│   └── images/       # Sample images
+├── logs/             # Log directory
+├── output/           # Output directory
+├── src/              # Core source code
 │   ├── __init__.py
-│   ├── preprocessing.py     # 预处理模块
-│   ├── 3d_reconstruction.py # 三维重建模块
-│   ├── wave_detector.py     # 浪形检测模块
-│   ├── visualization.py     # 可视化模块
-│   ├── pipeline.py          # 实时处理Pipeline
-│   └── utils.py             # 工具函数
-├── tests/            # 测试目录
-├── requirements.txt  # 依赖清单
-├── run.py            # 启动脚本
-└── README.md         # 项目说明
+│   ├── preprocessing.py     # Preprocessing module
+│   ├── 3d_reconstruction.py # 3D reconstruction module
+│   ├── wave_detector.py     # Wave detection module
+│   ├── visualization.py     # Visualization module
+│   ├── pipeline.py          # Real-time processing pipeline
+│   └── utils.py             # Utility functions
+├── tests/            # Test directory
+├── requirements.txt  # Dependency list
+├── run.py            # Start script
+└── README.md         # Project description
 ```
 
-## 环境要求
+## Environment Requirements
 
 - Python 3.8+
 - OpenCV 4.8.0+
 - NumPy 1.24.3+
 - PyYAML 6.0.1+
-- Ultralytics 8.0.196+（用于YOLOv8）
+- Ultralytics 8.0.196+ (for YOLOv8)
 - scikit-learn 1.3.0+
 - pandas 2.0.3+
 - matplotlib 3.7.2+
 
-## 安装依赖
+## Installation
 
 ```bash
-# 创建虚拟环境
+# Create virtual environment
 python -m venv .venv
 
-# 激活虚拟环境
+# Activate virtual environment
 # Windows
 .venv\Scripts\activate
 # Linux/macOS
 source .venv/bin/activate
 
-# 安装依赖
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## 配置说明
+## Configuration
 
-配置文件位于 `config/config.yaml`，包含以下主要部分：
+The configuration file is located at `config/config.yaml` and includes the following main sections:
 
-- **camera**：相机配置，包括类型、路径、分辨率等
-- **calibration**：标定参数，包括像素到毫米的转换系数
-- **preprocessing**：预处理配置，包括去雾、去噪、对比度增强等
-- **reconstruction**：三维重建配置，包括重建方法、平面拟合等
-- **detection**：浪形检测配置，包括浪形类型、等级阈值等
-- **realtime**：实时处理配置，包括多线程、异步处理等
-- **visualization**：可视化配置，包括显示参数、绘图参数等
-- **logging**：日志配置，包括级别、文件路径等
-- **output**：输出配置，包括CSV、JSON输出等
-- **exception**：异常处理配置，包括断流、过曝、黑屏等
+- **camera**: Camera configuration, including type, path, resolution, etc.
+- **calibration**: Calibration parameters, including pixel-to-millimeter conversion factors
+- **preprocessing**: Preprocessing configuration, including defogging, denoising, contrast enhancement, etc.
+- **reconstruction**: 3D reconstruction configuration, including reconstruction method, plane fitting, etc.
+- **detection**: Wave detection configuration, including wave types, level thresholds, etc.
+- **realtime**: Real-time processing configuration, including multi-threading, async processing, etc.
+- **visualization**: Visualization configuration, including display parameters, plotting parameters, etc.
+- **logging**: Log configuration, including level, file path, etc.
+- **output**: Output configuration, including CSV, JSON output, etc.
+- **exception**: Exception handling configuration, including disconnection, overexposure, black screen, etc.
 
-## 运行系统
+## Running the System
 
-### 基本运行
+### Basic Usage
 
 ```bash
-# 使用默认配置运行
+# Run with default configuration
 python run.py
 
-# 使用指定配置文件
+# Use specified configuration file
 python run.py --config config/config.yaml
 
-# 处理本地视频
+# Process local video
 python run.py --video data/sample_video.mp4
 
-# 使用工业相机
+# Use industrial camera
 python run.py --camera 0
 
-# 处理图像文件夹
+# Process image folder
 python run.py --folder data/images
 
-# 开启调试模式
+# Enable debug mode
 python run.py --debug
 ```
 
-### 键盘控制
+### Keyboard Controls
 
-- `q`：退出系统
-- `s`：保存当前帧
+- `q`: Exit the system
+- `s`: Save current frame
 
-## 输出说明
+## Output Description
 
-- **CSV输出**：`output/detection_results.csv`，包含时间戳、浪形类型、等级、高度、宽度、位置等信息
-- **JSON输出**：`output/detection_results.json`，包含详细的检测结果和处理信息
-- **日志输出**：`logs/detection.log`，包含系统运行日志
-- **图像输出**：`output/capture.jpg`，保存的截图
+- **CSV Output**: `output/detection_results.csv`, includes timestamp, wave type, level, height, width, position, etc.
+- **JSON Output**: `output/detection_results.json`, includes detailed detection results and processing information
+- **Log Output**: `logs/detection.log`, includes system running logs
+- **Image Output**: `output/capture.jpg`, saved screenshot
 
-## 浪形类型
+## Wave Types
 
-系统支持以下浪形类型：
+The system supports the following wave types:
 
-- **平直**：带钢表面平整，无明显波浪
-- **DS单边浪**：驱动侧单边浪
-- **WS单边浪**：工作侧单边浪
-- **双边浪**：两侧同时出现波浪
-- **中浪**：带钢中间出现波浪
-- **复合浪形**：同时存在多种浪形
+- **Flat**: Steel strip surface is flat, no obvious waves
+- **DS Single Side Wave**: Drive side single side wave
+- **WS Single Side Wave**: Work side single side wave
+- **Double Side Wave**: Waves on both sides simultaneously
+- **Center Wave**: Wave in the middle of the steel strip
+- **Composite Wave**: Multiple wave types simultaneously
 
-## 浪形等级
+## Wave Levels
 
-系统将浪形分为以下等级：
+The system classifies waves into the following levels:
 
-- **低**：浪高 < 1.0mm
-- **中**：1.0mm ≤ 浪高 < 2.0mm
-- **高**：2.0mm ≤ 浪高 < 3.0mm
-- **严重**：浪高 ≥ 3.0mm
+- **Low**: Wave height < 1.0mm
+- **Medium**: 1.0mm ≤ Wave height < 2.0mm
+- **High**: 2.0mm ≤ Wave height < 3.0mm
+- **Severe**: Wave height ≥ 3.0mm
 
-## 性能优化
+## Performance Optimization
 
-1. **多线程处理**：使用多线程并行处理帧图像，提高处理速度
-2. **队列缓冲**：使用队列缓冲帧数据，避免处理延迟
-3. **帧丢弃**：当队列满时，丢弃旧帧，确保实时性
-4. **算法优化**：优化预处理和检测算法，减少计算复杂度
-5. **内存管理**：合理管理内存，避免内存泄漏
+1. **Multi-threading**: Use multi-threading to process frame images in parallel, improving processing speed
+2. **Queue Buffering**: Use queue buffering for frame data to avoid processing delays
+3. **Frame Dropping**: When the queue is full, drop old frames to ensure real-time performance
+4. **Algorithm Optimization**: Optimize preprocessing and detection algorithms to reduce computational complexity
+5. **Memory Management**: Manage memory properly to avoid memory leaks
 
-## 异常处理
+## Exception Handling
 
-系统具备以下异常处理能力：
+The system has the following exception handling capabilities:
 
-- **断流处理**：相机断流时自动重连
-- **过曝处理**：检测到过曝时发出警告
-- **黑屏处理**：检测到黑屏时发出警告
-- **无带钢处理**：检测到无带钢时发出警告
+- **Disconnection Handling**: Automatic reconnection when camera disconnection occurs
+- **Overexposure Handling**: Warning when overexposure is detected
+- **Black Screen Handling**: Warning when black screen is detected
+- **No Steel Strip Handling**: Warning when no steel strip is detected
 
-## 扩展与定制
+## Extension and Customization
 
-### 添加新的浪形类型
+### Adding New Wave Types
 
-在 `config/config.yaml` 中修改 `detection.wave_types` 配置，然后在 `src/wave_detector.py` 中实现相应的分类逻辑。
+Modify the `detection.wave_types` configuration in `config/config.yaml`, then implement the corresponding classification logic in `src/wave_detector.py`.
 
-### 调整检测参数
+### Adjusting Detection Parameters
 
-在 `config/config.yaml` 中修改 `detection.parameters` 配置，包括最小浪长、最小浪高等参数。
+Modify the `detection.parameters` configuration in `config/config.yaml`, including minimum wave length, minimum wave height, and other parameters.
 
-### 集成新的相机
+### Integrating New Cameras
 
-在 `config/config.yaml` 中修改 `camera` 配置，添加新相机的参数。
+Modify the `camera` configuration in `config/config.yaml` to add parameters for new cameras.
 
-## 测试与验证
+## Testing and Validation
 
-### 单元测试
+### Unit Tests
 
 ```bash
 cd tests
 python -m pytest test_wave_detection.py -v
 ```
 
-### 性能测试
+### Performance Testing
 
 ```bash
 python run.py --video data/sample_video.mp4
 ```
 
-查看日志文件 `logs/detection.log` 中的性能指标。
+Check the performance indicators in the log file `logs/detection.log`.
 
-## 项目维护
+## Project Maintenance
 
-### 日志管理
+### Log Management
 
-定期清理 `logs/` 目录下的日志文件，避免占用过多磁盘空间。
+Regularly clean up log files in the `logs/` directory to avoid excessive disk space usage.
 
-### 依赖更新
+### Dependency Updates
 
-定期更新 `requirements.txt` 中的依赖包版本，确保系统的稳定性和安全性。
+Regularly update the dependency package versions in `requirements.txt` to ensure system stability and security.
 
-### 模型更新
+### Model Updates
 
-如果使用YOLOv8模型，定期更新模型文件，提高检测准确率。
+If using YOLOv8 models, regularly update model files to improve detection accuracy.
 
-## 注意事项
+## Notes
 
-1. **工业环境**：在高温、强水雾环境下，需要确保相机的防护措施到位
-2. **标定校准**：定期校准相机参数，确保测量精度
-3. **系统维护**：定期检查系统运行状态，确保无故障运行
-4. **数据备份**：定期备份检测结果和日志文件
+1. **Industrial Environment**: In high-temperature, high-water mist environments, ensure adequate camera protection measures
+2. **Calibration**: Regularly calibrate camera parameters to ensure measurement accuracy
+3. **System Maintenance**: Regularly check system operation status to ensure trouble-free operation
+4. **Data Backup**: Regularly back up detection results and log files
 
-## 联系方式
+## Contact
 
-- 作者：Builder
-- 邮箱：builder@example.com
-- 项目地址：https://github.com/builder/steel-wave-detection
+- Author: Builder
+- Email: builder@example.com
+- Project URL: https://github.com/builder/steel-wave-detection
 
 ---
 
-**© 2026 热连轧带钢浪形检测系统**
+**© 2026 Hot Rolling Steel Strip Wave Detection System**

@@ -32,7 +32,7 @@ class Visualizer:
         self.font_size = self.drawing_config.get('font_size', 1.0)
         
         # 窗口配置
-        self.window_name = self.display_config.get('window_name', '带钢浪形检测')
+        self.window_name = self.display_config.get('window_name', 'Steel Wave Detection')
         self.window_size = self.display_config.get('window_size', {'width': 1280, 'height': 720})
         
     def visualize(self, frame: np.ndarray, contour_data: Dict, detection_result: Dict, info: Dict) -> np.ndarray:
@@ -47,8 +47,18 @@ class Visualizer:
         Returns:
             可视化后的图像
         """
-        # 创建副本
-        vis_frame = frame.copy()
+        # 创建副本（使用较小的尺寸以减少内存占用）
+        target_width = self.window_size.get('width', 1280)
+        target_height = self.window_size.get('height', 720)
+        
+        # 如果图像太大，先缩小
+        if frame.shape[1] > target_width or frame.shape[0] > target_height:
+            scale = min(target_width / frame.shape[1], target_height / frame.shape[0])
+            new_width = int(frame.shape[1] * scale)
+            new_height = int(frame.shape[0] * scale)
+            vis_frame = cv2.resize(frame, (new_width, new_height))
+        else:
+            vis_frame = frame.copy()
         
         # 绘制轮廓
         if self.drawing_config.get('enable', True):
@@ -130,8 +140,8 @@ class Visualizer:
             绘制后的图像
         """
         # 绘制浪形类型
-        wave_type = detection_result.get('wave_type', '未知')
-        wave_level = detection_result.get('wave_level', '低')
+        wave_type = detection_result.get('wave_type', 'Unknown')
+        wave_level = detection_result.get('wave_level', 'Low')
         wave_height = detection_result.get('wave_height', 0)
         wave_width = detection_result.get('wave_width', 0)
         
@@ -139,40 +149,40 @@ class Visualizer:
         text_y = 30
         text_step = 30
         
-        cv2.putText(frame, f'浪形类型: {wave_type}', (20, text_y), 
+        cv2.putText(frame, f'Type: {wave_type}', (20, text_y), 
                     cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
         text_y += text_step
         
-        cv2.putText(frame, f'浪形等级: {wave_level}', (20, text_y), 
+        cv2.putText(frame, f'Level: {wave_level}', (20, text_y), 
                     cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
         text_y += text_step
         
-        cv2.putText(frame, f'浪高: {wave_height} mm', (20, text_y), 
+        cv2.putText(frame, f'Height: {wave_height} mm', (20, text_y), 
                     cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
         text_y += text_step
         
-        cv2.putText(frame, f'浪宽: {wave_width} mm', (20, text_y), 
+        cv2.putText(frame, f'Width: {wave_width} mm', (20, text_y), 
                     cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
         text_y += text_step
         
         # 绘制浪形位置
         wave_position = detection_result.get('wave_position', {})
         if wave_position:
-            cv2.putText(frame, f'浪形位置: ({wave_position.get("x", 0):.2f}, {wave_position.get("y", 0):.2f}) mm', 
+            cv2.putText(frame, f'Pos: ({wave_position.get("x", 0):.1f}, {wave_position.get("y", 0):.1f})', 
                         (20, text_y), cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
             text_y += text_step
         
         # 绘制处理信息
         if 'fps' in info:
-            cv2.putText(frame, f'FPS: {info["fps"]:.2f}', (frame.shape[1] - 200, 30), 
+            cv2.putText(frame, f'FPS: {info["fps"]:.1f}', (frame.shape[1] - 150, 30), 
                         cv2.FONT_HERSHEY_SIMPLEX, self.font_size, self.colors['text'], 2)
         
         if 'overexposed' in info and info['overexposed']:
-            cv2.putText(frame, '警告: 过曝', (frame.shape[1] - 200, 60), 
+            cv2.putText(frame, 'OVEREXPOSED', (frame.shape[1] - 200, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, self.font_size, (0, 0, 255), 2)
         
         if 'black_screen' in info and info['black_screen']:
-            cv2.putText(frame, '警告: 黑屏', (frame.shape[1] - 200, 60), 
+            cv2.putText(frame, 'BLACK SCREEN', (frame.shape[1] - 200, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, self.font_size, (0, 0, 255), 2)
         
         return frame
@@ -196,14 +206,17 @@ class Visualizer:
         # 显示图像
         cv2.imshow(self.window_name, frame)
         
-        # 检查按键
+        # 检查按键（使用较短的等待时间，避免阻塞）
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             return False
         elif key == ord('s'):
             # 保存当前帧
-            cv2.imwrite('output/capture.jpg', frame)
-            print('图像已保存')
+            try:
+                cv2.imwrite('output/capture.jpg', frame)
+                print('图像已保存')
+            except Exception as e:
+                print(f'保存图像失败: {e}')
         
         return True
     

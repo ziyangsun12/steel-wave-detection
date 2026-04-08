@@ -101,13 +101,19 @@ def get_results():
     if os.path.exists(csv_file):
         try:
             import pandas as pd
+            # 检查文件是否为空
+            if os.path.getsize(csv_file) == 0:
+                return jsonify({'status': 'success', 'data': []})
+            
             df = pd.read_csv(csv_file)
             results = df.to_dict('records')
             return jsonify({'status': 'success', 'data': results})
+        except pd.errors.EmptyDataError:
+            return jsonify({'status': 'success', 'data': []})
         except Exception as e:
             return jsonify({'status': 'error', 'message': f'读取结果失败: {str(e)}'})
     else:
-        return jsonify({'status': 'error', 'message': '结果文件不存在'})
+        return jsonify({'status': 'success', 'data': []})
 
 
 @app.route('/api/preview', methods=['GET'])

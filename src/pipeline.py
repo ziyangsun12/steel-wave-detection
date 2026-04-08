@@ -202,23 +202,59 @@ class Pipeline:
     
     def _process_thread(self):
         """处理线程"""
+        frame_count = 0
+        last_gc_time = time.time()
+        
         while self.running:
             try:
                 frame = self.frame_queue.get(timeout=1.0)
                 if frame is None:
                     break
                 
+                # 处理帧
                 result = self._process_frame(frame)
-                self.result_queue.put(result)
+                
+                # 限制结果队列大小，防止内存溢出
+                if self.result_queue.qsize() < self.result_queue.maxsize:
+                    self.result_queue.put(result)
+                else:
+                    # 丢弃旧结果
+                    try:
+                        self.result_queue.get_nowait()
+                        self.result_queue.put(result)
+                    except queue.Empty:
+                        pass
+                
+                frame_count += 1
+                
+                # 每处理100帧进行一次垃圾回收
+                if frame_count % 100 == 0:
+                    import gc
+                    gc.collect()
+                
+                # 每30秒强制垃圾回收
+                current_time = time.time()
+                if current_time - last_gc_time > 30:
+                    import gc
+                    gc.collect()
+                    last_gc_time = current_time
+                
+                # 控制处理速度，避免CPU过载
+                time.sleep(0.001)
                 
             except queue.Empty:
                 continue
             except Exception as e:
                 self.logger.error(f'处理线程错误: {e}')
+                import traceback
+                self.logger.error(traceback.format_exc())
                 continue
     
     def _visualize_thread(self):
         """可视化线程"""
+        frame_count = 0
+        last_gc_time = time.time()
+        
         while self.running:
             try:
                 result = self.result_queue.get(timeout=1.0)
@@ -240,10 +276,33 @@ class Pipeline:
                 # 保存结果
                 self._save_result(result)
                 
+                # 释放大对象内存
+                del result
+                del vis_frame
+                
+                frame_count += 1
+                
+                # 每处理50帧进行一次垃圾回收
+                if frame_count % 50 == 0:
+                    import gc
+                    gc.collect()
+                
+                # 每20秒强制垃圾回收
+                current_time = time.time()
+                if current_time - last_gc_time > 20:
+                    import gc
+                    gc.collect()
+                    last_gc_time = current_time
+                
+                # 控制显示帧率，避免卡顿
+                time.sleep(0.01)
+                
             except queue.Empty:
                 continue
             except Exception as e:
                 self.logger.error(f'可视化线程错误: {e}')
+                import traceback
+                self.logger.error(traceback.format_exc())
                 continue
     
     def _save_result(self, result: Dict):
@@ -297,7 +356,13 @@ class Pipeline:
             self.logger.error(f'无法打开视频: {video_path}')
             return
         
-        self.logger.info(f'开始处理视频: {video_path}')
+        # 获取视频信息
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.logger.info(f'开始处理视频: {video_path}, FPS: {fps}, 总帧数: {total_frames}')
+        
+        frame_count = 0
+        last_gc_time = time.time()
         
         while self.running:
             ret, frame = cap.read()
@@ -314,9 +379,27 @@ class Pipeline:
                     self.frame_queue.put(frame)
                 except queue.Empty:
                     pass
+            
+            frame_count += 1
+            
+            # 每读取100帧进行一次垃圾回收
+            if frame_count % 100 == 0:
+                import gc
+                gc.collect()
+                self.logger.info(f'已读取 {frame_count}/{total_frames} 帧')
+            
+            # 每30秒强制垃圾回收
+            current_time = time.time()
+            if current_time - last_gc_time > 30:
+                import gc
+                gc.collect()
+                last_gc_time = current_time
+            
+            # 控制读取速度，避免内存溢出
+            time.sleep(0.001)
         
         cap.release()
-        self.logger.info('视频处理完成')
+        self.logger.info(f'视频处理完成，共处理 {frame_count} 帧')
     
     def _read_camera(self, camera_id: int):
         """读取相机
