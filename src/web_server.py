@@ -9,10 +9,15 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 
 # 添加当前目录到导入路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
 
-# 使用相对导入
-from .pipeline import Pipeline
-from .utils import Utils
+# 使用绝对导入
+try:
+    from src.pipeline import Pipeline
+    from src.utils import Utils
+except ImportError:
+    from pipeline import Pipeline
+    from utils import Utils
 
 # 获取项目根目录
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
