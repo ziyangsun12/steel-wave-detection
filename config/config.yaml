@@ -3,7 +3,7 @@
 # 相机配置
 camera:
   # 相机类型: 'industrial' 或 'local' 或 'folder'
-  type: 'local'
+  type: 'folder'
   # 本地视频路径
   video_path: 'data/sample_video.mp4'
   # 文件夹路径（当type为'folder'时使用）

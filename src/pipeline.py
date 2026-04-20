@@ -39,8 +39,8 @@ class Pipeline:
         self.utils = Utils(config)
         
         # 初始化队列
-        self.frame_queue = queue.Queue(maxsize=30)
-        self.result_queue = queue.Queue(maxsize=30)
+        self.frame_queue = queue.Queue(maxsize=10)  # 进一步减少队列大小，减少内存使用
+        self.result_queue = queue.Queue(maxsize=10)
         
         # 初始化线程
         self.threads = []
@@ -48,7 +48,8 @@ class Pipeline:
         
         # 性能监控
         self.fps = 0.0
-        self.frame_count = 0
+        self.frame_count = 0  # 用于计算FPS的帧数
+        self.total_processed_frames = 0  # 总处理帧数
         self.last_time = time.time()
         
         # 数据输出
@@ -147,6 +148,78 @@ class Pipeline:
             except Exception as e:
                 self.logger.error(f'关闭JSON输出失败: {e}')
     
+    def _detect_exceptions(self, frame: np.ndarray) -> Dict:
+        """检测异常情况
+        
+        Args:
+            frame: 输入帧图像
+        
+        Returns:
+            异常信息字典
+        """
+        exception_config = self.config.get('exception', {})
+        
+        info = {
+            'has_exception': False,
+            'type': None,
+            'details': {},
+            'message': ''
+        }
+        
+        # 检查图像是否有效
+        if frame is None or frame.size == 0:
+            info['has_exception'] = True
+            info['type'] = 'invalid_frame'
+            info['details']['frame_size'] = frame.size if frame is not None else 0
+            info['message'] = '无效的帧图像'
+            return info
+        
+        # 检查黑屏
+        black_screen_config = exception_config.get('black_screen', {})
+        black_threshold = black_screen_config.get('threshold', 10)
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        avg_brightness = np.mean(gray)
+        
+        if avg_brightness < black_threshold:
+            info['has_exception'] = True
+            info['type'] = 'black_screen'
+            info['details']['avg_brightness'] = avg_brightness
+            info['details']['threshold'] = black_threshold
+            info['message'] = f'黑屏检测: 平均亮度 {avg_brightness:.2f} < 阈值 {black_threshold}'
+            return info
+        
+        # 检查过曝
+        overexposure_config = exception_config.get('overexposure', {})
+        overexposure_threshold = overexposure_config.get('threshold', 240)
+        overexposure_ratio = overexposure_config.get('ratio', 0.8)
+        
+        overexposed_pixels = np.sum(gray > overexposure_threshold)
+        total_pixels = gray.size
+        overexposure_percentage = overexposed_pixels / total_pixels
+        
+        if overexposure_percentage > overexposure_ratio:
+            info['has_exception'] = True
+            info['type'] = 'overexposure'
+            info['details']['overexposure_percentage'] = overexposure_percentage
+            info['details']['threshold'] = overexposure_threshold
+            info['details']['ratio'] = overexposure_ratio
+            info['message'] = f'过曝检测: 过曝像素比例 {overexposure_percentage:.2f} > 阈值 {overexposure_ratio}'
+            return info
+        
+        # 检查图像模糊
+        blur_threshold = exception_config.get('blur', {}).get('threshold', 100)
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        if laplacian_var < blur_threshold:
+            info['has_exception'] = True
+            info['type'] = 'blur'
+            info['details']['laplacian_variance'] = laplacian_var
+            info['details']['threshold'] = blur_threshold
+            info['message'] = f'图像模糊: 拉普拉斯方差 {laplacian_var:.2f} < 阈值 {blur_threshold}'
+            return info
+        
+        return info
+    
     def _process_frame(self, frame: np.ndarray) -> Dict:
         """处理单帧图像
         
@@ -158,17 +231,79 @@ class Pipeline:
         """
         start_time = time.time()
         
+        # 异常检测
+        exception_info = self._detect_exceptions(frame)
+        if exception_info['has_exception']:
+            # 计算性能
+            process_time = time.time() - start_time
+            
+            # 更新FPS
+            self.frame_count += 1
+            self.total_processed_frames += 1
+            current_time = time.time()
+            if current_time - self.last_time > 1.0:
+                self.fps = self.frame_count / (current_time - self.last_time)
+                self.frame_count = 0
+                self.last_time = current_time
+            
+            # 构建结果
+            result = {
+                'frame': frame,
+                'binary': None,
+                'mask': None,
+                'contour_data': {},
+                'detection_result': {},
+                'info': {
+                    'exception': exception_info,
+                    'process_time': process_time,
+                    'fps': self.fps
+                }
+            }
+            return result
+        
         # 预处理
         binary, preprocess_info = self.preprocessor.preprocess(frame)
         
         # 分割带钢
-        mask, segment_info = self.preprocessor.segment_steel(binary)
+        mask, segment_info = self.preprocessor.segment_steel(frame)
+        
+        # 检查是否有带钢
+        if segment_info.get('no_steel', False):
+            # 计算性能
+            process_time = time.time() - start_time
+            
+            # 更新FPS
+            self.frame_count += 1
+            self.total_processed_frames += 1
+            current_time = time.time()
+            if current_time - self.last_time > 1.0:
+                self.fps = self.frame_count / (current_time - self.last_time)
+                self.frame_count = 0
+                self.last_time = current_time
+            
+            # 构建结果
+            result = {
+                'frame': frame,
+                'binary': binary,
+                'mask': mask,
+                'contour_data': {},
+                'detection_result': {},
+                'info': {
+                    'preprocess': preprocess_info,
+                    'segment': segment_info,
+                    'reconstruct': {},
+                    'detect': {},
+                    'process_time': process_time,
+                    'fps': self.fps
+                }
+            }
+            return result
         
         # 三维重建
         contour_data, reconstruct_info = self.reconstructor.reconstruct(binary, mask)
         
         # 浪形检测
-        detection_result, detect_info = self.detector.detect(contour_data)
+        detection_result, detect_info = self.detector.detect(contour_data, frame)
         
         # 计算性能
         process_time = time.time() - start_time
@@ -227,20 +362,19 @@ class Pipeline:
                 
                 frame_count += 1
                 
-                # 每处理100帧进行一次垃圾回收
-                if frame_count % 100 == 0:
+                # 每处理500帧进行一次垃圾回收，减少GC开销
+                if frame_count % 500 == 0:
                     import gc
                     gc.collect()
                 
-                # 每30秒强制垃圾回收
+                # 每120秒强制垃圾回收
                 current_time = time.time()
-                if current_time - last_gc_time > 30:
+                if current_time - last_gc_time > 120:
                     import gc
                     gc.collect()
                     last_gc_time = current_time
                 
-                # 控制处理速度，避免CPU过载
-                time.sleep(0.001)
+                # 移除不必要的延迟，提高处理速度
                 
             except queue.Empty:
                 continue
@@ -282,20 +416,20 @@ class Pipeline:
                 
                 frame_count += 1
                 
-                # 每处理50帧进行一次垃圾回收
-                if frame_count % 50 == 0:
+                # 每处理300帧进行一次垃圾回收，减少GC开销
+                if frame_count % 300 == 0:
                     import gc
                     gc.collect()
                 
-                # 每20秒强制垃圾回收
+                # 每80秒强制垃圾回收
                 current_time = time.time()
-                if current_time - last_gc_time > 20:
+                if current_time - last_gc_time > 80:
                     import gc
                     gc.collect()
                     last_gc_time = current_time
                 
                 # 控制显示帧率，避免卡顿
-                time.sleep(0.01)
+                time.sleep(0.001)  # 进一步减少延迟，提高显示速度
                 
             except queue.Empty:
                 continue
@@ -334,11 +468,46 @@ class Pipeline:
         # 保存到JSON
         if self.json_file:
             try:
+                # 确保所有值都是JSON可序列化的
+                def make_serializable(obj):
+                    if isinstance(obj, bool):
+                        return int(obj)
+                    elif isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                    elif isinstance(obj, np.integer):
+                        return int(obj)
+                    elif isinstance(obj, np.floating):
+                        return float(obj)
+                    elif isinstance(obj, dict):
+                        return {k: make_serializable(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [make_serializable(item) for item in obj]
+                    else:
+                        try:
+                            json.dumps(obj)
+                            return obj
+                        except:
+                            return str(obj)
+                
+                # 手动处理可能的布尔值问题
                 json_data = {
                     'timestamp': timestamp,
-                    'detection_result': detection_result,
-                    'info': result['info']
+                    'detection_result': make_serializable(detection_result),
+                    'info': make_serializable(result['info'])
                 }
+                
+                # 再次确保没有布尔值
+                def remove_bools(obj):
+                    if isinstance(obj, dict):
+                        return {k: remove_bools(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [remove_bools(item) for item in obj]
+                    elif isinstance(obj, bool):
+                        return int(obj)
+                    else:
+                        return obj
+                
+                json_data = remove_bools(json_data)
                 json_str = json.dumps(json_data, ensure_ascii=False, indent=2)
                 self.json_file.write(json_str + ',\n')
                 self.json_file.flush()
@@ -407,25 +576,46 @@ class Pipeline:
         Args:
             camera_id: 相机ID
         """
-        cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
-            self.logger.error(f'无法打开相机: {camera_id}')
-            return
+        exception_config = self.config.get('exception', {})
+        stream_loss_config = exception_config.get('stream_loss', {})
+        max_retries = stream_loss_config.get('max_retries', 5)
+        retry_interval = stream_loss_config.get('retry_interval', 1.0)
         
-        # 设置相机参数
-        width = self.config.get('camera', {}).get('resolution', {}).get('width', 1280)
-        height = self.config.get('camera', {}).get('resolution', {}).get('height', 720)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        
-        self.logger.info(f'开始处理相机: {camera_id}')
+        retry_count = 0
+        cap = None
         
         while self.running:
+            if cap is None or not cap.isOpened():
+                cap = cv2.VideoCapture(camera_id)
+                if not cap.isOpened():
+                    retry_count += 1
+                    self.logger.error(f'无法打开相机: {camera_id}, 重试 {retry_count}/{max_retries}')
+                    if retry_count > max_retries:
+                        self.logger.error(f'相机打开失败，已达到最大重试次数')
+                        break
+                    time.sleep(retry_interval)
+                    continue
+                
+                # 设置相机参数
+                width = self.config.get('camera', {}).get('resolution', {}).get('width', 1280)
+                height = self.config.get('camera', {}).get('resolution', {}).get('height', 720)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                
+                self.logger.info(f'开始处理相机: {camera_id}')
+                retry_count = 0
+            
             ret, frame = cap.read()
             if not ret:
                 # 相机断流处理
                 self.logger.warning('相机断流，尝试重连...')
-                time.sleep(1.0)
+                retry_count += 1
+                if retry_count > max_retries:
+                    self.logger.error(f'相机断流，已达到最大重试次数')
+                    cap = None
+                    continue
+                
+                time.sleep(retry_interval)
                 cap.release()
                 cap = cv2.VideoCapture(camera_id)
                 continue
@@ -441,7 +631,8 @@ class Pipeline:
                 except queue.Empty:
                     pass
         
-        cap.release()
+        if cap is not None:
+            cap.release()
         self.logger.info('相机处理完成')
     
     def _read_folder(self, folder_path: str):
@@ -489,13 +680,39 @@ class Pipeline:
     def start(self):
         """启动Pipeline"""
         self.logger.info('启动带钢浪形检测Pipeline')
-        self.running = True
         
         # 初始化输出
         self._init_output()
         
+        # 启动标志
+        self.running = True
+        
+        # 启动视频/相机读取线程
+        camera_type = self.config.get('camera', {}).get('type', 'local')
+        if camera_type == 'local':
+            video_path = self.config.get('camera', {}).get('video_path')
+            if video_path:
+                t = threading.Thread(target=self._read_video, args=(video_path,))
+                t.daemon = True
+                t.start()
+                self.threads.append(t)
+        elif camera_type == 'industrial':
+            camera_id = self.config.get('camera', {}).get('camera_id', 0)
+            t = threading.Thread(target=self._read_camera, args=(camera_id,))
+            t.daemon = True
+            t.start()
+            self.threads.append(t)
+        elif camera_type == 'folder':
+            folder_path = self.config.get('camera', {}).get('folder_path')
+            if folder_path:
+                t = threading.Thread(target=self._read_folder, args=(folder_path,))
+                t.daemon = True
+                t.start()
+                self.threads.append(t)
+        
         # 启动处理线程
-        num_threads = self.realtime_config.get('multithreading', {}).get('num_threads', 4)
+        import multiprocessing
+        num_threads = self.realtime_config.get('multithreading', {}).get('num_threads', min(4, multiprocessing.cpu_count()))
         for i in range(num_threads):
             t = threading.Thread(target=self._process_thread)
             t.daemon = True
@@ -507,20 +724,6 @@ class Pipeline:
         t.daemon = True
         t.start()
         self.threads.append(t)
-        
-        # 启动视频/相机读取
-        camera_config = self.config.get('camera', {})
-        camera_type = camera_config.get('type', 'local')
-        
-        if camera_type == 'local':
-            video_path = camera_config.get('video_path', 'data/sample_video.mp4')
-            self._read_video(video_path)
-        elif camera_type == 'industrial':
-            camera_id = camera_config.get('camera_id', 0)
-            self._read_camera(camera_id)
-        elif camera_type == 'folder':
-            folder_path = camera_config.get('folder_path', 'data/images')
-            self._read_folder(folder_path)
         
     def stop(self):
         """停止Pipeline"""
@@ -559,6 +762,15 @@ class Pipeline:
         Returns:
             状态信息字典
         """
+        # 计算实际的处理帧率
+        current_time = time.time()
+        if current_time - self.last_time > 0.1:  # 每0.1秒更新一次
+            # 确保至少有一帧处理过
+            if self.frame_count > 0:
+                self.fps = self.frame_count / (current_time - self.last_time)
+                self.frame_count = 0
+                self.last_time = current_time
+        
         return {
             'running': self.running,
             'fps': round(self.fps, 2),
@@ -566,5 +778,6 @@ class Pipeline:
             'result_queue_size': self.result_queue.qsize(),
             'thread_count': len(self.threads),
             'camera_type': self.config.get('camera', {}).get('type', 'local'),
-            'video_path': self.config.get('camera', {}).get('video_path', '')
+            'video_path': self.config.get('camera', {}).get('video_path', ''),
+            'processed_frames': self.total_processed_frames
         }

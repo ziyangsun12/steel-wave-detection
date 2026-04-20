@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">Builder
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,137 +7,334 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
         }
         .container {
-            max-width: 1200px;
-            margin-top: 30px;
+            max-width: 1400px;
+            margin-top: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        .header p {
+            font-size: 1.1rem;
+            margin: 10px 0 0 0;
+            opacity: 0.9;
         }
         .card {
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            overflow: hidden;
         }
         .card-header {
             background-color: #007bff;
             color: white;
+            font-size: 1.1rem;
+            font-weight: bold;
+            padding: 15px 20px;
+        }
+        .card-body {
+            padding: 20px;
         }
         .btn {
-            margin-right: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        }
+        .video-container {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            background-color: #f8f9fa;
         }
         .video-preview {
-            max-width: 100%;
+            width: 100%;
+            height: auto;
             max-height: 400px;
-            border: 1px solid #ddd;
-            margin-bottom: 20px;
+            display: block;
+        }
+        .detection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .realtime-result {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 5;
         }
         .result-table {
             max-height: 400px;
             overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .result-table table {
+            margin-bottom: 0;
+        }
+        .result-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .result-table td {
+            text-align: center;
         }
         .status-indicator {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
-            margin-right: 5px;
+            margin-right: 8px;
         }
         .status-running {
             background-color: #28a745;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
         }
         .status-stopped {
             background-color: #dc3545;
+            box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
         }
         .analysis-result {
-            max-width: 100%;
+            width: 100%;
+            height: auto;
             max-height: 400px;
+            border-radius: 8px;
             border: 1px solid #ddd;
-            margin-top: 10px;
+            margin-top: 15px;
+        }
+        .info-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .info-card h5 {
+            color: #007bff;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .info-card ul {
+            margin-bottom: 0;
+        }
+        .info-card li {
+            margin-bottom: 8px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .form-control {
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        .alert {
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            margin-top: 30px;
+            color: #6c757d;
+            font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="text-center mb-4">带钢浪形检测系统</h1>
-        
-        <!-- 视频选择 -->
-        <div class="card">
-            <div class="card-header">
-                视频文件选择
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="videoPath" class="form-label">视频文件路径</label>
-                    <input type="text" class="form-control" id="videoPath" placeholder="输入视频文件路径">
-                    <small class="form-text text-muted">例如: data/工作侧有单边浪.mp4</small>
-                </div>
-                <button id="previewBtn" class="btn btn-primary">预览视频</button>
-                <button id="startBtn" class="btn btn-success">开始检测</button>
-                <button id="stopBtn" class="btn btn-danger">停止检测</button>
-                <div id="previewContainer" class="mt-4">
-                    <!-- 视频预览将显示在这里 -->
-                </div>
-            </div>
+        <!-- 页面头部 -->
+        <div class="header text-center">
+            <h1>带钢浪形检测系统</h1>
+            <p>实时检测带钢浪形缺陷，提供精准的浪形类型和等级评估</p>
         </div>
         
-        <!-- 检测状态 -->
-        <div class="card">
-            <div class="card-header">
-                检测状态
-            </div>
-            <div class="card-body">
-                <div id="statusDisplay">
-                    <span class="status-indicator status-stopped"></span> 未启动
+        <!-- 主要内容区 -->
+        <div class="row">
+            <!-- 左侧：视频检测区域 -->
+            <div class="col-md-6">
+                <!-- 视频选择和控制 -->
+                <div class="card">
+                    <div class="card-header">
+                        视频检测控制
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="videoSelect" class="form-label">选择视频文件</label>
+                            <select class="form-control" id="videoSelect">
+                                <option value="">请选择视频文件</option>
+                                <!-- 视频文件将通过JavaScript动态添加 -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="videoPath" class="form-label">视频文件路径</label>
+                            <input type="text" class="form-control" id="videoPath" placeholder="输入视频文件路径">
+                            <small class="form-text text-muted">例如: data/工作侧有单边浪.mp4</small>
+                        </div>
+                        <div class="mt-4 mb-4">
+                            <button id="previewBtn" class="btn btn-primary">预览视频</button>
+                            <button id="startBtn" class="btn btn-success">开始检测</button>
+                            <button id="stopBtn" class="btn btn-danger">停止检测</button>
+                        </div>
+                        <!-- 视频预览和实时检测结果 -->
+                        <div class="video-container" id="previewContainer">
+                            <!-- 视频预览将显示在这里 -->
+                            <div class="detection-overlay">
+                                请选择视频文件并点击预览
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="statusInfo" class="mt-2">
-                    <!-- 状态信息将显示在这里 -->
+                
+                <!-- 检测状态 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        检测状态
+                    </div>
+                    <div class="card-body">
+                        <div id="statusDisplay" class="mb-2">
+                            <span class="status-indicator status-stopped"></span> 未启动
+                        </div>
+                        <div id="statusInfo">
+                            <p>检测未启动</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- 检测结果 -->
-        <div class="card">
-            <div class="card-header">
-                检测结果
-            </div>
-            <div class="card-body">
-                <button id="refreshResultsBtn" class="btn btn-primary mb-3">刷新结果</button>
-                <div class="result-table">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>时间戳</th>
-                                <th>浪形类型</th>
-                                <th>浪形等级</th>
-                                <th>浪高(mm)</th>
-                                <th>浪宽(mm)</th>
-                                <th>位置X(mm)</th>
-                                <th>位置Y(mm)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsTableBody">
-                            <!-- 结果将显示在这里 -->
-                        </tbody>
-                    </table>
+            
+            <!-- 右侧：检测结果和说明 -->
+            <div class="col-md-6">
+                <!-- 实时检测结果 -->
+                <div class="card">
+                    <div class="card-header">
+                        实时检测结果
+                    </div>
+                    <div class="card-body">
+                        <div id="realtimeResult" class="mb-4">
+                            <div class="alert alert-info">
+                                <h5>等待检测开始</h5>
+                                <p>请选择视频文件并点击开始检测按钮</p>
+                            </div>
+                        </div>
+                        <div class="result-table">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>时间戳</th>
+                                        <th>浪形类型</th>
+                                        <th>浪形等级</th>
+                                        <th>浪高(mm)</th>
+                                        <th>浪宽(mm)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center">暂无结果</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 检测结果说明 -->
+                <div class="card mt-3 info-card">
+                    <div class="card-header">
+                        检测结果说明
+                    </div>
+                    <div class="card-body">
+                        <h5>浪形类型:</h5>
+                        <ul>
+                            <li><strong>Flat</strong>: 带钢表面平直，无明显浪形</li>
+                            <li><strong>DS Single Side Wave</strong>: 传动侧单边浪</li>
+                            <li><strong>WS Single Side Wave</strong>: 工作侧单边浪</li>
+                            <li><strong>Double Side Wave</strong>: 双边浪</li>
+                            <li><strong>Center Wave</strong>: 中浪</li>
+                            <li><strong>Composite Wave</strong>: 复合浪</li>
+                        </ul>
+                        <h5>浪形等级:</h5>
+                        <ul>
+                            <li><strong>Low</strong>: 浪高 < 1.0mm</li>
+                            <li><strong>Medium</strong>: 1.0mm ≤ 浪高 < 2.0mm</li>
+                            <li><strong>High</strong>: 2.0mm ≤ 浪高 < 3.0mm</li>
+                            <li><strong>Severe</strong>: 浪高 ≥ 3.0mm</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- 单帧分析 -->
-        <div class="card">
+        <div class="card mt-4">
             <div class="card-header">
                 单帧分析
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <label for="imagePath" class="form-label">图像文件路径</label>
-                    <input type="text" class="form-control" id="imagePath" placeholder="输入图像文件路径">
-                </div>
-                <button id="analyzeBtn" class="btn btn-primary">分析图像</button>
-                <div id="analysisResult" class="mt-4">
-                    <!-- 分析结果将显示在这里 -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="imagePath" class="form-label">图像文件路径</label>
+                            <input type="text" class="form-control" id="imagePath" placeholder="输入图像文件路径">
+                        </div>
+                        <button id="analyzeBtn" class="btn btn-primary mt-2">分析图像</button>
+                    </div>
+                    <div class="col-md-8">
+                        <div id="analysisResult">
+                            <!-- 分析结果将显示在这里 -->
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- 页脚 -->
+        <div class="footer">
+            <p>带钢浪形检测系统 &copy; 2026</p>
         </div>
     </div>
     
@@ -187,6 +384,7 @@
                 if (data.status === 'success') {
                     alert('检测已开始');
                     updateStatus();
+                    startRealtimeUpdate();
                 } else {
                     alert(data.message);
                 }
@@ -207,6 +405,7 @@
                 if (data.status === 'success') {
                     alert('检测已停止');
                     updateStatus();
+                    stopRealtimeUpdate();
                 } else {
                     alert(data.message);
                 }
@@ -215,23 +414,6 @@
                 console.error('停止失败:', error);
                 alert('停止失败');
             });
-        });
-        
-        // 刷新结果
-        document.getElementById('refreshResultsBtn').addEventListener('click', function() {
-            fetch('/api/results')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        updateResultsTable(data.data);
-                    } else {
-                        alert(data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('获取结果失败:', error);
-                    alert('获取结果失败');
-                });
         });
         
         // 分析图像
@@ -257,12 +439,12 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <h4>分析结果</h4>
-                                <p>浪形类型: ${data.result.wave_type}</p>
-                                <p>浪形等级: ${data.result.wave_level}</p>
-                                <p>浪高: ${data.result.wave_height} mm</p>
-                                <p>浪宽: ${data.result.wave_width} mm</p>
-                                <p>位置X: ${data.result.wave_position.x || 0} mm</p>
-                                <p>位置Y: ${data.result.wave_position.y || 0} mm</p>
+                                <p><strong>浪形类型:</strong> ${data.result.wave_type}</p>
+                                <p><strong>浪形等级:</strong> ${data.result.wave_level}</p>
+                                <p><strong>浪高:</strong> ${data.result.wave_height} mm</p>
+                                <p><strong>浪宽:</strong> ${data.result.wave_width} mm</p>
+                                <p><strong>位置X:</strong> ${data.result.wave_position.x || 0} mm</p>
+                                <p><strong>位置Y:</strong> ${data.result.wave_position.y || 0} mm</p>
                             </div>
                             <div class="col-md-6">
                                 <h4>可视化结果</h4>
@@ -293,9 +475,9 @@
                         if (status.running) {
                             statusDisplay.innerHTML = '<span class="status-indicator status-running"></span> 运行中';
                             statusInfo.innerHTML = `
-                                <p>处理帧率: ${status.fps || 0} FPS</p>
-                                <p>已处理帧: ${status.processed_frames || 0}</p>
-                                <p>检测结果: ${status.detections || 0}</p>
+                                <p><strong>处理帧率:</strong> ${status.fps || 0} FPS</p>
+                                <p><strong>已处理帧:</strong> ${status.processed_frames || 0}</p>
+                                <p><strong>检测结果:</strong> ${status.detections || 0}</p>
                             `;
                         } else {
                             statusDisplay.innerHTML = '<span class="status-indicator status-stopped"></span> 已停止';
@@ -317,7 +499,7 @@
             tableBody.innerHTML = '';
             
             if (results.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="text-center">暂无结果</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">暂无结果</td></tr>';
                 return;
             }
             
@@ -328,22 +510,91 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${new Date(result.timestamp * 1000).toLocaleString()}</td>
-                    <td>${result.wave_type}</td>
-                    <td>${result.wave_level}</td>
-                    <td>${result.wave_height}</td>
-                    <td>${result.wave_width}</td>
-                    <td>${result.wave_position_x}</td>
-                    <td>${result.wave_position_y}</td>
+                    <td>${result.wave_type || 'Unknown'}</td>
+                    <td>${result.wave_level || 'Unknown'}</td>
+                    <td>${result.wave_height || 0}</td>
+                    <td>${result.wave_width || 0}</td>
                 `;
                 tableBody.appendChild(row);
             });
         }
         
-        // 定期更新状态
-        setInterval(updateStatus, 2000);
+        // 实时更新结果
+        let realtimeUpdateInterval;
+        function startRealtimeUpdate() {
+            // 清除之前的定时器
+            if (realtimeUpdateInterval) {
+                clearInterval(realtimeUpdateInterval);
+            }
+            
+            // 每500ms更新一次结果
+            realtimeUpdateInterval = setInterval(() => {
+                fetch('/api/results')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            updateResultsTable(data.data);
+                            
+                            // 更新实时结果显示
+                            const realtimeResult = document.getElementById('realtimeResult');
+                            if (data.data.length > 0) {
+                                const latestResult = data.data[data.data.length - 1];
+                                realtimeResult.innerHTML = `
+                                    <div class="alert alert-success">
+                                        <h5>最新检测结果</h5>
+                                        <p><strong>浪形类型:</strong> ${latestResult.wave_type || 'Unknown'}</p>
+                                        <p><strong>浪形等级:</strong> ${latestResult.wave_level || 'Unknown'}</p>
+                                        <p><strong>浪高:</strong> ${latestResult.wave_height || 0} mm</p>
+                                        <p><strong>浪宽:</strong> ${latestResult.wave_width || 0} mm</p>
+                                    </div>
+                                `;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取结果失败:', error);
+                    });
+            }, 500);
+        }
+        
+        function stopRealtimeUpdate() {
+            if (realtimeUpdateInterval) {
+                clearInterval(realtimeUpdateInterval);
+                realtimeUpdateInterval = null;
+            }
+        }
+        
+        // 加载视频文件列表
+        function loadVideoFiles() {
+            fetch('/api/videos')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const videoSelect = document.getElementById('videoSelect');
+                        videoSelect.innerHTML = '<option value="">请选择视频文件</option>';
+                        
+                        data.data.forEach(video => {
+                            const option = document.createElement('option');
+                            option.value = video.path;
+                            option.textContent = video.name;
+                            videoSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('加载视频文件失败:', error);
+                });
+        }
+        
+        // 视频选择变化事件
+        document.getElementById('videoSelect').addEventListener('change', function() {
+            const selectedVideoPath = this.value;
+            document.getElementById('videoPath').value = selectedVideoPath;
+        });
         
         // 初始化
         updateStatus();
+        loadVideoFiles();
     </script>
 </body>
 </html>

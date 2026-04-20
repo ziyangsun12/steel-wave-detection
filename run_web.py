@@ -8,7 +8,7 @@ from src.web_server import run_web_server
 def main():
     """主函数"""
     # 确保工作目录正确
-    os.chdir(os.path.dirname(os.path.dirname(__file__)))
+    os.chdir(os.path.dirname(__file__))
     
     # 运行Web服务器
     print("启动带钢浪形检测Web服务器...")

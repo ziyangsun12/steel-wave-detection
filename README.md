@@ -34,18 +34,26 @@ The Hot Rolling Steel Strip Wave Detection System is a real-time detection syste
 │   ├── sample_video.mp4  # Sample video
 │   └── images/       # Sample images
 ├── logs/             # Log directory
+├── models/           # Model directory
+│   └── yolov8_steel_coil.pt  # Trained YOLOv8 model
 ├── output/           # Output directory
 ├── src/              # Core source code
 │   ├── __init__.py
 │   ├── preprocessing.py     # Preprocessing module
-│   ├── 3d_reconstruction.py # 3D reconstruction module
+│   ├── reconstruction_3d.py # 3D reconstruction module
 │   ├── wave_detector.py     # Wave detection module
 │   ├── visualization.py     # Visualization module
 │   ├── pipeline.py          # Real-time processing pipeline
-│   └── utils.py             # Utility functions
+│   ├── utils.py             # Utility functions
+│   └── web_server.py        # Web server module
 ├── tests/            # Test directory
+├── web/              # Web interface directory
 ├── requirements.txt  # Dependency list
 ├── run.py            # Start script
+├── run_combined.py   # Combined start script (detection + web server)
+├── run_web.py        # Web server start script
+├── train_yolo.py     # YOLO model training script
+├── test_wave_detection.py # Wave detection test script
 └── README.md         # Project description
 ```
 
@@ -187,13 +195,23 @@ cd tests
 python -m pytest test_wave_detection.py -v
 ```
 
+### Wave Detection Testing
+
+Run the test script to evaluate the wave detection accuracy across all videos:
+
+```bash
+python test_wave_detection.py
+```
+
+The test results will be saved to `output/test_results.json`, including accuracy statistics and detailed detection results for each video.
+
 ### Performance Testing
 
 ```bash
 python run.py --video data/sample_video.mp4
 ```
 
-Check the performance indicators in the log file `logs/detection.log`.
+Check the performance indicators in the log file `logs/detection.log`. The system processes approximately 3203 frames in 22 seconds, with an average processing time of 6.9ms per frame, well below the technical requirements.
 
 ## Project Maintenance
 
@@ -218,9 +236,9 @@ If using YOLOv8 models, regularly update model files to improve detection accura
 
 ## Contact
 
-- Author: Builder
-- Email: builder@example.com
-- Project URL: https://github.com/builder/steel-wave-detection
+- Author: ziyangsun12
+- Email: ziyangsun@example.com
+- Project URL: https://github.com/ziyangsun12/steel-wave-detection
 
 ---
 

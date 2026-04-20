@@ -21,6 +21,19 @@ class Reconstructor:
         # 像素到毫米的转换系数
         self.pixel_to_mm = self.calib_config.get('pixel_to_mm', {'x': 0.1, 'y': 0.11})
         
+        # 透视变换矩阵
+        self.homography_matrix = None
+        
+        # 标定参数
+        self.camera_matrix = np.array([
+            [self.calib_config.get('intrinsics', {}).get('fx', 1000.0), 0, self.calib_config.get('intrinsics', {}).get('cx', 640.0)],
+            [0, self.calib_config.get('intrinsics', {}).get('fy', 1000.0), self.calib_config.get('intrinsics', {}).get('cy', 360.0)],
+            [0, 0, 1]
+        ])
+        
+        # 畸变系数
+        self.dist_coeffs = np.zeros((4, 1))  # 假设无畸变
+        
     def reconstruct(self, binary: np.ndarray, mask: Optional[np.ndarray] = None) -> Tuple[Dict, Dict]:
         """重建三维轮廓
         
@@ -152,17 +165,21 @@ class Reconstructor:
         if len(center_line) == 0:
             return np.array([])
         
+        # 使用像素到毫米的转换
+        center_line_mm = self.pixel_to_metric(center_line)
+        left_edge_mm = self.pixel_to_metric(left_edge)
+        right_edge_mm = self.pixel_to_metric(right_edge)
+        
         # 计算宽度变化作为高度的代理
-        width = np.linalg.norm(right_edge - left_edge, axis=1)
+        width_mm = np.linalg.norm(right_edge_mm - left_edge_mm, axis=1)
         
-        # 转换为毫米
-        width_mm = width * self.pixel_to_mm['x']
+        # 平滑处理
+        width_mm = self._smooth_data(width_mm, window_size=5)
         
-        # 计算高度场（这里使用宽度变化作为高度的近似）
-        # 实际应用中可能需要更复杂的算法，如结构光或立体视觉
+        # 计算高度场
         height_field = np.zeros((len(center_line), 3))
-        height_field[:, 0] = center_line[:, 1] * self.pixel_to_mm['y']  # y坐标（纵向）
-        height_field[:, 1] = center_line[:, 0] * self.pixel_to_mm['x']  # x坐标（横向）
+        height_field[:, 0] = center_line_mm[:, 1]  # y坐标（纵向）
+        height_field[:, 1] = center_line_mm[:, 0]  # x坐标（横向）
         height_field[:, 2] = width_mm  # 高度（使用宽度变化）
         
         return height_field
@@ -306,6 +323,28 @@ class Reconstructor:
                 valleys.append(i)
         return valleys
     
+    def _smooth_data(self, data: np.ndarray, window_size: int = 5) -> np.ndarray:
+        """平滑数据
+        
+        Args:
+            data: 输入数据
+            window_size: 窗口大小
+        
+        Returns:
+            平滑后的数据
+        """
+        if len(data) == 0:
+            return data
+        
+        # 使用移动平均滤波
+        smoothed = np.convolve(data, np.ones(window_size)/window_size, mode='same')
+        
+        # 处理边界
+        smoothed[:window_size//2] = data[:window_size//2]
+        smoothed[-window_size//2:] = data[-window_size//2:]
+        
+        return smoothed
+    
     def get_3d_points(self, contour_data: Dict) -> np.ndarray:
         """获取三维点云
         
@@ -326,3 +365,132 @@ class Reconstructor:
         points_3d[:, 2] = height_field[:, 2]  # z坐标（高度）
         
         return points_3d
+    
+    def calibrate(self, image_points: np.ndarray, object_points: np.ndarray) -> Tuple[bool, Dict]:
+        """相机标定
+        
+        Args:
+            image_points: 图像平面上的点
+            object_points: 真实世界中的点
+        
+        Returns:
+            标定是否成功，标定信息
+        """
+        info = {'calibration_applied': True}
+        
+        try:
+            # 相机标定
+            ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+                [object_points], [image_points], 
+                (640, 480), self.camera_matrix, self.dist_coeffs
+            )
+            
+            if ret:
+                self.camera_matrix = mtx
+                self.dist_coeffs = dist
+                info['calibration_success'] = True
+                info['reprojection_error'] = ret
+                info['camera_matrix'] = mtx.tolist()
+                info['dist_coeffs'] = dist.tolist()
+            else:
+                info['calibration_success'] = False
+                info['error'] = '标定失败'
+                
+        except Exception as e:
+            info['calibration_success'] = False
+            info['error'] = str(e)
+        
+        return info['calibration_success'], info
+    
+    def compute_homography(self, image_points: np.ndarray, object_points: np.ndarray) -> bool:
+        """计算透视变换矩阵
+        
+        Args:
+            image_points: 图像平面上的点
+            object_points: 真实世界中的点
+        
+        Returns:
+            计算是否成功
+        """
+        try:
+            # 计算单应性矩阵
+            H, status = cv2.findHomography(image_points, object_points)
+            if H is not None:
+                self.homography_matrix = H
+                return True
+            return False
+        except Exception as e:
+            print(f"计算单应性矩阵失败: {e}")
+            return False
+    
+    def pixel_to_metric(self, pixel_points: np.ndarray) -> np.ndarray:
+        """将像素坐标转换为毫米坐标
+        
+        Args:
+            pixel_points: 像素坐标
+        
+        Returns:
+            毫米坐标
+        """
+        if len(pixel_points) == 0:
+            return np.array([])
+        
+        # 如果有单应性矩阵，使用它进行转换
+        if self.homography_matrix is not None:
+            # 转换为齐次坐标
+            if pixel_points.ndim == 1:
+                pixel_points = np.array([pixel_points])
+            
+            # 添加齐次坐标
+            homogeneous_points = np.hstack([pixel_points, np.ones((len(pixel_points), 1))])
+            
+            # 应用单应性变换
+            transformed = np.dot(self.homography_matrix, homogeneous_points.T).T
+            
+            # 转换回非齐次坐标
+            metric_points = transformed[:, :2] / transformed[:, 2:3]
+            return metric_points
+        
+        # 否则使用简单的比例转换
+        metric_points = pixel_points.copy()
+        metric_points[:, 0] *= self.pixel_to_mm['x']
+        metric_points[:, 1] *= self.pixel_to_mm['y']
+        return metric_points
+    
+    def metric_to_pixel(self, metric_points: np.ndarray) -> np.ndarray:
+        """将毫米坐标转换为像素坐标
+        
+        Args:
+            metric_points: 毫米坐标
+        
+        Returns:
+            像素坐标
+        """
+        if len(metric_points) == 0:
+            return np.array([])
+        
+        # 如果有单应性矩阵的逆，使用它进行转换
+        if self.homography_matrix is not None:
+            try:
+                H_inv = np.linalg.inv(self.homography_matrix)
+                # 转换为齐次坐标
+                if metric_points.ndim == 1:
+                    metric_points = np.array([metric_points])
+                
+                # 添加齐次坐标
+                homogeneous_points = np.hstack([metric_points, np.ones((len(metric_points), 1))])
+                
+                # 应用逆单应性变换
+                transformed = np.dot(H_inv, homogeneous_points.T).T
+                
+                # 转换回非齐次坐标
+                pixel_points = transformed[:, :2] / transformed[:, 2:3]
+                return pixel_points.astype(int)
+            except Exception as e:
+                print(f"逆单应性变换失败: {e}")
+        
+        # 否则使用简单的比例转换
+        pixel_points = metric_points.copy()
+        pixel_points[:, 0] /= self.pixel_to_mm['x']
+        pixel_points[:, 1] /= self.pixel_to_mm['y']
+        return pixel_points.astype(int)

@@ -62,6 +62,10 @@ class Visualizer:
         
         # 绘制轮廓
         if self.drawing_config.get('enable', True):
+            # 绘制YOLOv8分割结果（如果有）
+            if 'segment' in info and 'steel_bbox' in info['segment']:
+                vis_frame = self._draw_yolo_segmentation(vis_frame, info['segment'])
+            
             vis_frame = self._draw_contours(vis_frame, contour_data)
             vis_frame = self._draw_lines(vis_frame, contour_data)
             vis_frame = self._draw_wave_info(vis_frame, detection_result, info)
@@ -128,6 +132,37 @@ class Visualizer:
         
         return frame
     
+    def _draw_yolo_segmentation(self, frame: np.ndarray, segment_info: Dict) -> np.ndarray:
+        """绘制YOLOv8分割结果
+        
+        Args:
+            frame: 输入帧图像
+            segment_info: 分割信息
+        
+        Returns:
+            绘制后的图像
+        """
+        # 绘制卷钢边界框
+        if 'steel_bbox' in segment_info:
+            x, y, w, h = segment_info['steel_bbox']
+            # 绘制边界框
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            # 绘制标签
+            cv2.putText(frame, 'Steel Coil', (x, y - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+        
+        # 绘制分割掩码（如果有）
+        if 'mask' in segment_info:
+            mask = segment_info['mask']
+            if mask is not None and mask.shape[:2] == frame.shape[:2]:
+                # 创建掩码的彩色版本
+                mask_color = np.zeros_like(frame)
+                mask_color[:, :, 0] = mask  # 蓝色通道
+                # 叠加掩码到原始图像
+                frame = cv2.addWeighted(frame, 0.7, mask_color, 0.3, 0)
+        
+        return frame
+    
     def _draw_wave_info(self, frame: np.ndarray, detection_result: Dict, info: Dict) -> np.ndarray:
         """绘制浪形信息
         
@@ -185,6 +220,17 @@ class Visualizer:
             cv2.putText(frame, 'BLACK SCREEN', (frame.shape[1] - 200, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, self.font_size, (0, 0, 255), 2)
         
+        # 显示异常信息
+        if 'exception' in info:
+            exception_info = info['exception']
+            if exception_info.get('has_exception', False):
+                exception_message = exception_info.get('message', '异常')
+                # 限制消息长度，避免显示过长
+                if len(exception_message) > 30:
+                    exception_message = exception_message[:30] + '...'
+                cv2.putText(frame, f'异常: {exception_message}', (20, frame.shape[0] - 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, self.font_size, (0, 0, 255), 2)
+        
         return frame
     
     def show(self, frame: np.ndarray) -> bool:
@@ -199,24 +245,29 @@ class Visualizer:
         if not self.display_config.get('enable', True):
             return True
         
-        # 调整窗口大小
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self.window_name, self.window_size['width'], self.window_size['height'])
-        
-        # 显示图像
-        cv2.imshow(self.window_name, frame)
-        
-        # 检查按键（使用较短的等待时间，避免阻塞）
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            return False
-        elif key == ord('s'):
-            # 保存当前帧
-            try:
-                cv2.imwrite('output/capture.jpg', frame)
-                print('图像已保存')
-            except Exception as e:
-                print(f'保存图像失败: {e}')
+        try:
+            # 尝试显示图像，在没有图形界面的环境中会失败
+            # 调整窗口大小
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.window_name, self.window_size['width'], self.window_size['height'])
+            
+            # 显示图像
+            cv2.imshow(self.window_name, frame)
+            
+            # 检查按键（使用较短的等待时间，避免阻塞）
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                return False
+            elif key == ord('s'):
+                # 保存当前帧
+                try:
+                    cv2.imwrite('output/capture.jpg', frame)
+                    print('图像已保存')
+                except Exception as e:
+                    print(f'保存图像失败: {e}')
+        except Exception as e:
+            # 在没有图形界面的环境中，跳过显示
+            pass
         
         return True
     
