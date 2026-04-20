@@ -37,3 +37,5 @@ flake8==6.0.0  # 代码检查
 # PyQt5 用于GUI界面
 # requests 用于网络请求
 # psutil 用于系统资源监控
+
+flask
