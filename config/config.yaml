@@ -1,175 +1,48 @@
-# 热连轧带钢浪形检测系统配置文件
+# 系统配置文件
 
 # 相机配置
 camera:
-  # 相机类型: 'industrial' 或 'local' 或 'folder'
-  type: 'folder'
-  # 本地视频路径
-  video_path: 'data/sample_video.mp4'
-  # 文件夹路径（当type为'folder'时使用）
-  folder_path: 'data/images'
-  # 相机ID（当type为'industrial'时使用）
-  camera_id: 0
-  # 相机分辨率
-  resolution:
-    width: 1280
-    height: 720
-  # 帧率
-  fps: 30
+  type: local  # 本地视频文件
+  video_path: data/无浪形视频.mp4  # 默认视频路径
+  fps: 30  # 帧率
+  resolution: [1280, 720]  # 分辨率
 
-# 标定参数
-calibration:
-  # 像素到毫米的转换系数
-  pixel_to_mm:
-    x: 0.1  # 水平方向
-    y: 0.11  # 垂直方向
-  # 相机内参
-  intrinsics:
-    fx: 1000.0
-    fy: 1000.0
-    cx: 640.0
-    cy: 360.0
-  # 相机外参
-  extrinsics:
-    rotation: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-    translation: [0.0, 0.0, 1000.0]
+# 管道配置
+pipeline:
+  preprocessing: true  # 是否进行预处理
+  detection: true  # 是否进行检测
+  visualization: true  # 是否进行可视化
+  save_results: true  # 是否保存结果
 
 # 预处理配置
 preprocessing:
-  # 去雾参数
-  dehaze:
-    enable: true
-    dark_channel_prior: true
-    transmission_estimate_window: 15
-    omega: 0.95
-  # 去噪参数
-  denoise:
-    enable: true
-    method: 'gaussian'
-    kernel_size: 7
-  # 对比度增强
-  contrast:
-    enable: true
-    method: 'clahe'
-    clip_limit: 2.0
-    tile_grid_size: [8, 8]
-  # 阈值处理
-  threshold:
-    method: 'adaptive'
-    block_size: 15
-    c: 10
-  # 形态学操作
-  morphology:
-    enable: true
-    kernel_size: [5, 5]
-    operations: ['close', 'open']
+  dehazing: true  # 是否进行去雾
+  denoising: true  # 是否进行降噪
+  resize: [640, 480]  # 预处理后分辨率
 
-# 三维重建配置
-reconstruction:
-  # 重建方法: 'monocular' 或 'stereo'
-  method: 'monocular'
-  # 平面拟合
-  plane_fitting:
-    enable: true
-    polynomial_order: 2
-  # 高度计算
-  height:
-    reference_level: 'bottom'
-    min_points: 30
-
-# 浪形检测配置
+# 检测配置
 detection:
-  # 浪形类型
-  wave_types:
-    - 'DS单边浪'
-    - 'WS单边浪'
-    - '双边浪'
-    - '中浪'
-  # 浪形等级
-  wave_levels:
-    low: 1.0  # mm
-    medium: 2.0  # mm
-    high: 3.0  # mm
-  # 检测参数
-  parameters:
-    min_wave_length: 50  # 像素
-    min_wave_height: 0.5  # mm
-    smoothing_window: 10
-
-# 实时处理配置
-realtime:
-  # 多线程
-  multithreading:
-    enable: true
-    num_threads: 4
-  # 异步处理
-  async:
-    enable: true
-  # 性能指标
-  performance:
-    max_latency: 500  # ms
-    max_response_time: 200  # ms
+  threshold: 0.5  # 检测阈值
+  min_area: 100  # 最小检测面积
+  max_area: 10000  # 最大检测面积
 
 # 可视化配置
 visualization:
-  # 显示参数
-  display:
-    enable: true
-    window_name: '带钢浪形检测'
-    window_size:
-      width: 1280
-      height: 720
-  # 绘图参数
-  drawing:
-    enable: true
-    line_width: 2
-    font_size: 1.0
-    colors:
-      contour: [0, 255, 0]
-      wave: [0, 0, 255]
-      text: [255, 255, 255]
+  show_raw: true  # 显示原始视频
+  show_dehazed: true  # 显示去雾后视频
+  show_contour: true  # 显示轮廓提取
+  show_heatmap: true  # 显示热力图
+  show_results: true  # 显示检测结果
 
-# 日志配置
-logging:
-  # 日志级别
-  level: 'INFO'
-  # 日志文件
-  file: 'logs/detection.log'
-  # 日志格式
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# 结果保存配置
+save:
+  enabled: true  # 是否保存结果
+  path: results/  # 保存路径
+  format: json  # 保存格式
 
-# 数据输出配置
-output:
-  # CSV输出
-  csv:
-    enable: true
-    file: 'output/detection_results.csv'
-  # JSON输出
-  json:
-    enable: true
-    file: 'output/detection_results.json'
-  # 告警配置
-  alert:
-    enable: true
-    threshold: 2.5  # mm
-    recipients: ['operator@steel-plant.com']
-
-# 异常处理配置
-exception:
-  # 断流处理
-  stream_loss:
-    enable: true
-    retry_interval: 1.0  # s
-    max_retries: 5
-  # 过曝处理
-  overexposure:
-    enable: true
-    threshold: 240
-  # 黑屏处理
-  black_screen:
-    enable: true
-    threshold: 10
-  # 无带钢处理
-  no_steel:
-    enable: true
-    min_contour_area: 10000
+# 系统配置
+system:
+  debug: false  # 是否启用调试模式
+  log_level: info  # 日志级别
+  max_frames: 1000  # 最大处理帧数
+  batch_size: 1  # 批处理大小

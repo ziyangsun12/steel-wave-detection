@@ -1,11 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <title>带钢浪形检测系统</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
@@ -440,11 +437,8 @@
                 <h1>浪形检测系统</h1>
             </div>
             <ul class="sidebar-menu">
-                <li><a href="#" class="active" data-tab="overview">系统总览</a></li>
-                <li><a href="#" data-tab="realtime">实时监控</a></li>
+                <li><a href="#" class="active" data-tab="realtime">实时监控</a></li>
                 <li><a href="#" data-tab="parameters">参数配置</a></li>
-                <li><a href="#" data-tab="history">历史日志</a></li>
-                <li><a href="#" data-tab="alerts">报警记录</a></li>
             </ul>
         </div>
         
@@ -466,8 +460,8 @@
             <div class="content-area">
 
                 
-                <!-- 系统总览 -->
-                <div id="overview" class="tab-content active">
+                <!-- 实时监控 -->
+                <div id="realtime" class="tab-content active">
                     <!-- 项目介绍 -->
                     <div class="card mb-4">
                         <div class="card-header">项目介绍</div>
@@ -504,67 +498,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- 系统状态 -->
-                    <div class="card mb-4">
-                        <div class="card-header">系统状态</div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="data-card">
-                                        <h3>检测状态</h3>
-                                        <div class="data-value error" id="detectionStatus">未启动</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="data-card">
-                                        <h3>当前视频</h3>
-                                        <div class="data-value" id="currentVideo">无</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="data-card">
-                                        <h3>系统运行时间</h3>
-                                        <div class="data-value" id="systemUptime">00:00:00</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- 视频文件列表 -->
-                    <div class="card mb-4">
-                        <div class="card-header">视频文件列表</div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <select id="videoSelect" class="form-select" style="background-color: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                                    <option value="">请选择视频文件</option>
-                                </select>
-                            </div>
-                            <button id="previewBtn" class="btn btn-primary">预览视频</button>
-                        </div>
-                    </div>
-                    
-                    <!-- 系统信息 -->
-                    <div class="card">
-                        <div class="card-header">系统信息</div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p><strong>版本:</strong> v1.0.0</p>
-                                    <p><strong>算法:</strong> 暗通道去雾 + 轮廓提取 + 浪形检测</p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p><strong>帧率:</strong> 30 FPS</p>
-                                    <p><strong>分辨率:</strong> 1280x720</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 实时监控 -->
-                <div id="realtime" class="tab-content">
                     
                     <!-- 视频控制与流 -->
                     <div class="row mb-4">
@@ -609,28 +542,6 @@
                                             <img id="heatmapVideo" src="" alt="热力图">
                                             <div class="video-overlay">
                                                 <strong>轮廓高度热力图</strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 当前状态显示 -->
-                                    <div class="mt-4 p-3 bg-dark text-white rounded" id="currentStatusDisplay">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <strong>当前状态：</strong>
-                                                <span id="currentStatusText" class="text-warning">未检测到带钢</span>
-                                            </div>
-                                            <div>
-                                                <strong>浪形类型：</strong>
-                                                <span id="currentWaveType">无</span>
-                                            </div>
-                                            <div>
-                                                <strong>浪形大小：</strong>
-                                                <span id="currentWaveSize">无</span>
-                                            </div>
-                                            <div>
-                                                <strong>处理时间：</strong>
-                                                <span id="currentProcessTime">0 ms</span>
                                             </div>
                                         </div>
                                     </div>
@@ -807,57 +718,7 @@
                     </div>
                 </div>
                 
-                <!-- 历史日志 -->
-                <div id="history" class="tab-content">
-                    <div class="card mb-4">
-                        <div class="card-header">历史检测记录</div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>时间</th>
-                                            <th>视频文件</th>
-                                            <th>检测结果</th>
-                                            <th>操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="historyTableBody">
-                                        <tr>
-                                            <td colspan="4" class="text-center">暂无历史记录</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 报警记录 -->
-                <div id="alerts" class="tab-content">
-                    <div class="card mb-4">
-                        <div class="card-header">报警记录</div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>时间</th>
-                                            <th>报警类型</th>
-                                            <th>详细信息</th>
-                                            <th>状态</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="alertsTableBody">
-                                        <tr>
-                                            <td colspan="4" class="text-center">暂无报警记录</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
             </div>
         </div>
     </div>
@@ -885,205 +746,19 @@
                 // 显示当前内容
                 const tabId = this.getAttribute('data-tab');
                 document.getElementById(tabId).classList.add('active');
-                
-                // 切换到系统总览时加载视频文件列表
-                if (tabId === 'overview') {
-                    loadVideoFiles();
-                }
-                
-                // 切换到历史日志时加载历史记录
-                if (tabId === 'history') {
-                    loadHistory();
-                }
-                
-                // 切换到报警记录时加载报警记录
-                if (tabId === 'alerts') {
-                    loadAlerts();
-                }
             });
         });
-        
-        // 加载视频文件列表
-        function loadVideoFiles() {
-            const videoSelect = document.getElementById('videoSelect');
-            if (!videoSelect) {
-                console.error('视频选择元素不存在');
-                return;
-            }
-            
-            fetch('/api/videos')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        const videos = data.data;
-                        
-                        // 清空现有选项
-                        videoSelect.innerHTML = '<option value="">请选择视频文件</option>';
-                        
-                        // 添加视频文件选项
-                        videos.forEach(video => {
-                            const option = document.createElement('option');
-                            option.value = video.path;
-                            option.textContent = video.name;
-                            videoSelect.appendChild(option);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('加载视频文件失败:', error);
-                });
-        }
-        
-        // 预览视频
-        const previewBtn = document.getElementById('previewBtn');
-        if (previewBtn) {
-            previewBtn.addEventListener('click', function() {
-                const videoSelect = document.getElementById('videoSelect');
-                if (!videoSelect) {
-                    alert('视频选择元素不存在');
-                    return;
-                }
-                
-                const selectedVideo = videoSelect.value;
-                
-                if (!selectedVideo) {
-                    alert('请选择视频文件');
-                    return;
-                }
-                
-                fetch('/api/preview?video_path=' + encodeURIComponent(selectedVideo))
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('预览成功');
-                        } else {
-                            alert(data.message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('预览失败:', error);
-                        alert('预览失败');
-                    });
-            });
-        }
-        
-        // 系统运行时间
-        let systemStartTime = new Date();
-        function updateSystemUptime() {
-            const systemUptimeElement = document.getElementById('systemUptime');
-            if (!systemUptimeElement) {
-                return;
-            }
-            
-            const now = new Date();
-            const uptime = Math.floor((now - systemStartTime) / 1000);
-            const hours = Math.floor(uptime / 3600);
-            const minutes = Math.floor((uptime % 3600) / 60);
-            const seconds = uptime % 60;
-            
-            const uptimeString = hours.toString().padStart(2, '0') + ':' + minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
-            systemUptimeElement.textContent = uptimeString;
-        }
-        
-        // 每秒钟更新系统运行时间
-        setInterval(updateSystemUptime, 1000);
-        
-        // 加载历史记录
-        function loadHistory() {
-            const historyTableBody = document.getElementById('historyTableBody');
-            if (!historyTableBody) {
-                console.error('历史记录表体元素不存在');
-                return;
-            }
-            
-            fetch('/api/results')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        const results = data.data;
-                        
-                        if (results.length === 0) {
-                            historyTableBody.innerHTML = '<tr><td colspan="4" class="text-center">暂无历史记录</td></tr>';
-                            return;
-                        }
-                        
-                        // 清空现有记录
-                        historyTableBody.innerHTML = '';
-                        
-                        // 添加历史记录
-                        results.forEach(result => {
-                            const row = document.createElement('tr');
-                            // 构建HTML字符串
-                            let rowHtml = '<td>' + new Date(result.timestamp * 1000).toLocaleString() + '</td>';
-                            rowHtml += '<td>视频文件</td>';
-                            rowHtml += '<td>' + (result.wave_type || '未知') + '</td>';
-                            rowHtml += '<td><button class="btn btn-sm btn-primary">查看详情</button></td>';
-                            row.innerHTML = rowHtml;
-                            historyTableBody.appendChild(row);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('加载历史记录失败:', error);
-                });
-        }
-        
-        // 加载报警记录
-        function loadAlerts() {
-            const alertsTableBody = document.getElementById('alertsTableBody');
-            if (!alertsTableBody) {
-                console.error('报警记录表体元素不存在');
-                return;
-            }
-            
-            // 模拟报警数据，使用当前时间
-            const now = new Date();
-            const currentTime = now.toISOString().slice(0, 19).replace('T', ' ');
-            
-            const alerts = [
-                {
-                    time: currentTime,
-                    type: '严重浪形',
-                    details: '检测到严重浪形缺陷',
-                    status: '已处理'
-                }
-            ];
-            
-            if (alerts.length === 0) {
-                alertsTableBody.innerHTML = '<tr><td colspan="4" class="text-center">暂无报警记录</td></tr>';
-                return;
-            }
-            
-            // 清空现有记录
-            alertsTableBody.innerHTML = '';
-            
-            // 添加报警记录
-            alerts.forEach(alert => {
-                const row = document.createElement('tr');
-                // 构建HTML字符串
-                let rowHtml = '<td>' + alert.time + '</td>';
-                rowHtml += '<td>' + alert.type + '</td>';
-                rowHtml += '<td>' + alert.details + '</td>';
-                rowHtml += '<td>' + alert.status + '</td>';
-                row.innerHTML = rowHtml;
-                alertsTableBody.appendChild(row);
-            });
-        }
         
 
         
         // 开始检测
         document.getElementById('startBtn').addEventListener('click', function() {
-            // 获取用户选择的视频文件
-            const videoSelect = document.getElementById('videoSelect');
-            const videoPath = videoSelect ? videoSelect.value : '';
-            
             fetch('/api/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ video_path: videoPath })
+                body: JSON.stringify({})
             })
             .then(response => response.json())
             .then(data => {
@@ -1098,10 +773,9 @@
                     document.getElementById('contourVideo').src = '/video/contour';
                     document.getElementById('heatmapVideo').src = '/video/heatmap';
                     
-                    // 更新当前视频显示
-                    if (document.getElementById('currentVideo')) {
-                        document.getElementById('currentVideo').textContent = data.label || '视频文件';
-                    }
+                    // 更新视频信息
+                    document.getElementById('totalFrames').textContent = data.total_frames;
+                    document.getElementById('videoSlider').max = data.total_frames;
                 } else {
                     alert(data.message);
                 }
@@ -1134,11 +808,6 @@
                     document.getElementById('totalFrames').textContent = '0';
                     document.getElementById('currentFrame').textContent = '0';
                     document.getElementById('videoSlider').value = '0';
-                    
-                    // 更新当前视频显示
-                    if (document.getElementById('currentVideo')) {
-                        document.getElementById('currentVideo').textContent = '无';
-                    }
                 } else {
                     alert(data.message);
                 }
@@ -1150,64 +819,26 @@
         });
         
         // 播放/暂停视频
-        const playBtn = document.getElementById('playBtn');
-        if (playBtn) {
-            playBtn.addEventListener('click', function() {
-                fetch('/api/play', {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        console.log('视频已开始播放');
-                    } else {
-                        alert(data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('播放失败:', error);
-                    alert('播放失败');
-                });
-            });
-        }
+        document.getElementById('playBtn').addEventListener('click', function() {
+            // 这里可以添加播放逻辑
+            alert('播放功能');
+        });
         
-        const pauseBtn = document.getElementById('pauseBtn');
-        if (pauseBtn) {
-            pauseBtn.addEventListener('click', function() {
-                fetch('/api/pause', {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        console.log('视频已暂停');
-                    } else {
-                        alert(data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('暂停失败:', error);
-                    alert('暂停失败');
-                });
-            });
-        }
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            // 这里可以添加暂停逻辑
+            alert('暂停功能');
+        });
         
         // 视频进度条拖动功能
-        const videoSlider = document.getElementById('videoSlider');
-        if (videoSlider) {
-            videoSlider.addEventListener('input', function() {
-                const sliderValue = this.value;
-                const currentFrame = document.getElementById('currentFrame');
-                if (currentFrame) {
-                    currentFrame.textContent = sliderValue;
-                }
-            });
-            
-            videoSlider.addEventListener('change', function() {
-                const frameIndex = parseInt(this.value);
-                setVideoFrame(frameIndex);
-            });
-        }
+        document.getElementById('videoSlider').addEventListener('input', function() {
+            const sliderValue = this.value;
+            document.getElementById('currentFrame').textContent = sliderValue;
+        });
+        
+        document.getElementById('videoSlider').addEventListener('change', function() {
+            const frameIndex = parseInt(this.value);
+            setVideoFrame(frameIndex);
+        });
         
         // 设置视频帧位置
         function setVideoFrame(frameIndex) {
@@ -1240,18 +871,10 @@
                         const totalFrames = document.getElementById('totalFrames');
                         const currentFrame = document.getElementById('currentFrame');
                         
-                        if (videoSlider) {
-                            videoSlider.max = videoInfo.total_frames;
-                            videoSlider.value = videoInfo.current_frame;
-                        }
-                        
-                        if (totalFrames) {
-                            totalFrames.textContent = videoInfo.total_frames;
-                        }
-                        
-                        if (currentFrame) {
-                            currentFrame.textContent = videoInfo.current_frame;
-                        }
+                        videoSlider.max = videoInfo.total_frames;
+                        totalFrames.textContent = videoInfo.total_frames;
+                        currentFrame.textContent = videoInfo.current_frame;
+                        videoSlider.value = videoInfo.current_frame;
                     }
                 })
                 .catch(error => {
@@ -1271,33 +894,25 @@
                     if (data.status === 'success') {
                         const status = data.data;
                         if (status.running) {
-                            if (statusDisplay) statusDisplay.innerHTML = '<span class="status-indicator status-normal"></span> 运行中';
-                            if (statusInfo) {
-                                // 构建HTML字符串
-                                let statusHtml = '<p><strong>处理帧率:</strong> ' + (status.fps || 0) + ' FPS</p>';
-                                statusHtml += '<p><strong>已处理帧:</strong> ' + (status.processed_frames || 0) + '</p>';
-                                statusHtml += '<p><strong>检测结果:</strong> ' + (status.detections || 0) + '</p>';
-                                statusInfo.innerHTML = statusHtml;
-                            }
-                            if (detectionStatus) {
-                                detectionStatus.textContent = '运行中';
-                                detectionStatus.className = 'data-value normal';
-                            }
+                            statusDisplay.innerHTML = '<span class="status-indicator status-normal"></span> 运行中';
+                            statusInfo.innerHTML = `
+                                <p><strong>处理帧率:</strong> ${status.fps || 0} FPS</p>
+                                <p><strong>已处理帧:</strong> ${status.processed_frames || 0}</p>
+                                <p><strong>检测结果:</strong> ${status.detections || 0}</p>
+                            `;
+                            detectionStatus.textContent = '运行中';
+                            detectionStatus.className = 'data-value normal';
                         } else {
-                            if (statusDisplay) statusDisplay.innerHTML = '<span class="status-indicator status-error"></span> 已停止';
-                            if (statusInfo) statusInfo.innerHTML = '<p>检测已停止</p>';
-                            if (detectionStatus) {
-                                detectionStatus.textContent = '已停止';
-                                detectionStatus.className = 'data-value error';
-                            }
-                        }
-                    } else {
-                        if (statusDisplay) statusDisplay.innerHTML = '<span class="status-indicator status-error"></span> 未启动';
-                        if (statusInfo) statusInfo.innerHTML = '<p>检测未启动</p>';
-                        if (detectionStatus) {
-                            detectionStatus.textContent = '未启动';
+                            statusDisplay.innerHTML = '<span class="status-indicator status-error"></span> 已停止';
+                            statusInfo.innerHTML = '<p>检测已停止</p>';
+                            detectionStatus.textContent = '已停止';
                             detectionStatus.className = 'data-value error';
                         }
+                    } else {
+                        statusDisplay.innerHTML = '<span class="status-indicator status-error"></span> 未启动';
+                        statusInfo.innerHTML = '<p>检测未启动</p>';
+                        detectionStatus.textContent = '未启动';
+                        detectionStatus.className = 'data-value error';
                     }
                 })
                 .catch(error => {
@@ -1324,97 +939,22 @@
                             
                             // 更新实时结果显示
                             const realtimeResult = document.getElementById('realtimeResult');
-                            if (realtimeResult) {
-                                // 确保数据存在且类型正确
-                                const status = frameInfo.status || '未检测到带钢';
-                                const waveLevel = frameInfo.wave_level || '无';
-                                const waveHeight = frameInfo.wave_height || 0;
-                                const waveWidth = frameInfo.wave_width || 0;
-                                const algorithmTime = frameInfo.algorithm_time || 0;
-                                
-                                // 构建状态颜色样式
-                                let statusStyle = '';
-                                if (status.includes('报警')) {
-                                    statusStyle = 'color: var(--status-error); font-weight: bold;';
-                                } else if (status.includes('未检测')) {
-                                    statusStyle = 'color: var(--text-secondary);';
-                                } else {
-                                    statusStyle = 'color: var(--status-normal); font-weight: bold;';
-                                }
-                                
-                                // 构建HTML字符串
-                                let html = '<div class="alert" style="background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary);">';
-                                html += '<h5>最新检测结果</h5>';
-                                html += '<p><strong>状态:</strong> <span style="' + statusStyle + '">' + status + '</span></p>';
-                                html += '<p><strong>浪形类型:</strong> ' + (status.includes('浪') ? status : '平直') + '</p>';
-                                html += '<p><strong>浪形等级:</strong> ' + waveLevel + '</p>';
-                                html += '<p><strong>浪高:</strong> ' + waveHeight.toFixed(2) + ' mm</p>';
-                                html += '<p><strong>浪宽:</strong> ' + waveWidth.toFixed(2) + ' mm</p>';
-                                html += '</div>';
-                                
-                                realtimeResult.innerHTML = html;
-                            }
+                            
+                            realtimeResult.innerHTML = `
+                                <div class="alert" style="background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                    <h5>最新检测结果</h5>
+                                    <p><strong>状态:</strong> ${frameInfo.status}</p>
+                                    <p><strong>浪形类型:</strong> ${frameInfo.status.includes('浪') ? frameInfo.status : '平直'}</p>
+                                    <p><strong>浪形等级:</strong> ${frameInfo.wave_level}</p>
+                                    <p><strong>浪高:</strong> ${frameInfo.wave_height.toFixed(2)} mm</p>
+                                    <p><strong>浪宽:</strong> ${frameInfo.wave_width.toFixed(2)} mm</p>
+                                </div>
+                            `;
                             
                             // 更新性能指标
-                            const algorithmTimeElement = document.getElementById('algorithmTime');
-                            if (algorithmTimeElement) {
-                                const algorithmTime = frameInfo.algorithm_time || 0;
-                                algorithmTimeElement.textContent = algorithmTime.toFixed(1) + ' ms';
-                                
-                                // 根据算法耗时设置颜色
-                                if (algorithmTime > 200) {
-                                    algorithmTimeElement.className = 'data-value error';
-                                } else if (algorithmTime > 100) {
-                                    algorithmTimeElement.className = 'data-value warning';
-                                } else {
-                                    algorithmTimeElement.className = 'data-value normal';
-                                }
-                            }
-                            
-                            const responseTimeElement = document.getElementById('responseTime');
-                            if (responseTimeElement) {
-                                const algorithmTime = frameInfo.algorithm_time || 0;
-                                responseTimeElement.textContent = (algorithmTime + Math.random() * 20).toFixed(1) + ' ms';
-                            }
-                            
-                            const fpsElement = document.getElementById('fps');
-                            if (fpsElement) {
-                                fpsElement.textContent = (30 - Math.random() * 5).toFixed(1) + ' FPS';
-                            }
-                            
-                            // 更新当前状态显示
-                            const currentStatusText = document.getElementById('currentStatusText');
-                            const currentWaveType = document.getElementById('currentWaveType');
-                            const currentWaveSize = document.getElementById('currentWaveSize');
-                            const currentProcessTime = document.getElementById('currentProcessTime');
-                            
-                            if (currentStatusText) {
-                                currentStatusText.textContent = status;
-                                // 设置状态颜色
-                                if (status.includes('报警')) {
-                                    currentStatusText.className = 'text-danger';
-                                } else if (status.includes('未检测')) {
-                                    currentStatusText.className = 'text-warning';
-                                } else {
-                                    currentStatusText.className = 'text-success';
-                                }
-                            }
-                            
-                            if (currentWaveType) {
-                                currentWaveType.textContent = status.includes('浪') ? status : '无';
-                            }
-                            
-                            if (currentWaveSize) {
-                                if (status.includes('浪')) {
-                                    currentWaveSize.textContent = '高 (高: ' + waveHeight.toFixed(2) + ' mm, 宽: ' + waveWidth.toFixed(2) + ' mm)';
-                                } else {
-                                    currentWaveSize.textContent = '无';
-                                }
-                            }
-                            
-                            if (currentProcessTime) {
-                                currentProcessTime.textContent = algorithmTime.toFixed(1) + ' ms';
-                            }
+                            document.getElementById('algorithmTime').textContent = `${frameInfo.algorithm_time.toFixed(1)} ms`;
+                            document.getElementById('responseTime').textContent = `${(frameInfo.algorithm_time + Math.random() * 20).toFixed(1)} ms`;
+                            document.getElementById('fps').textContent = `${(30 - Math.random() * 5).toFixed(1)} FPS`;
                         }
                     })
                     .catch(error => {
@@ -1450,16 +990,14 @@
                 const row = document.createElement('tr');
                 // 计算帧索引（假设每秒30帧）
                 const frameIndex = Math.floor(result.timestamp * 30);
-                
-                // 构建HTML字符串
-                let rowHtml = '<td>' + new Date(result.timestamp * 1000).toLocaleString() + '</td>';
-                rowHtml += '<td>' + (result.wave_type || 'Unknown') + '</td>';
-                rowHtml += '<td>' + (result.wave_level || 'Unknown') + '</td>';
-                rowHtml += '<td>' + (result.wave_height || 0) + '</td>';
-                rowHtml += '<td>' + (result.wave_width || 0) + '</td>';
-                rowHtml += '<td><button class="btn btn-sm btn-primary" onclick="backtrackToFrame(' + frameIndex + ')">回溯</button></td>';
-                
-                row.innerHTML = rowHtml;
+                row.innerHTML = `
+                    <td>${new Date(result.timestamp * 1000).toLocaleString()}</td>
+                    <td>${result.wave_type || 'Unknown'}</td>
+                    <td>${result.wave_level || 'Unknown'}</td>
+                    <td>${result.wave_height || 0}</td>
+                    <td>${result.wave_width || 0}</td>
+                    <td><button class="btn btn-sm btn-primary" onclick="backtrackToFrame(${frameIndex})">回溯</button></td>
+                `;
                 tableBody.appendChild(row);
             });
         }
@@ -1474,64 +1012,56 @@
             currentFrame.textContent = frameIndex;
         }
         
+        // 加载视频文件列表
+        function loadVideoFiles() {
+            fetch('/api/videos')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const videoSelect = document.getElementById('videoSelect');
+                        videoSelect.innerHTML = '<option value="">请选择视频文件</option>';
+                        
+                        data.data.forEach(video => {
+                            const option = document.createElement('option');
+                            option.value = video.path;
+                            option.textContent = video.name;
+                            videoSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('加载视频文件失败:', error);
+                });
+        }
+        
         // 滑块值更新
-        const omegaSlider = document.getElementById('omegaSlider');
-        if (omegaSlider) {
-            omegaSlider.addEventListener('input', function() {
-                const value = this.value / 100;
-                const omegaValue = document.getElementById('omegaValue');
-                if (omegaValue) {
-                    omegaValue.textContent = value.toFixed(2);
-                }
-            });
-        }
+        document.getElementById('omegaSlider').addEventListener('input', function() {
+            const value = this.value / 100;
+            document.getElementById('omegaValue').textContent = value.toFixed(2);
+        });
         
-        const t0Slider = document.getElementById('t0Slider');
-        if (t0Slider) {
-            t0Slider.addEventListener('input', function() {
-                const value = this.value / 100;
-                const t0Value = document.getElementById('t0Value');
-                if (t0Value) {
-                    t0Value.textContent = value.toFixed(2);
-                }
-            });
-        }
+        document.getElementById('t0Slider').addEventListener('input', function() {
+            const value = this.value / 100;
+            document.getElementById('t0Value').textContent = value.toFixed(2);
+        });
         
-        const thresholdSlider = document.getElementById('thresholdSlider');
-        if (thresholdSlider) {
-            thresholdSlider.addEventListener('input', function() {
-                const thresholdValue = document.getElementById('thresholdValue');
-                if (thresholdValue) {
-                    thresholdValue.textContent = this.value;
-                }
-            });
-        }
+        document.getElementById('thresholdSlider').addEventListener('input', function() {
+            document.getElementById('thresholdValue').textContent = this.value;
+        });
         
         // 应用参数
-        const applyParamsBtn = document.getElementById('applyParamsBtn');
-        if (applyParamsBtn) {
-            applyParamsBtn.addEventListener('click', function() {
-                const omegaSlider = document.getElementById('omegaSlider');
-                const t0Slider = document.getElementById('t0Slider');
-                const thresholdSlider = document.getElementById('thresholdSlider');
-                
-                if (omegaSlider && t0Slider && thresholdSlider) {
-                    const omega = omegaSlider.value / 100;
-                    const t0 = t0Slider.value / 100;
-                    const threshold = thresholdSlider.value;
-                    
-                    // 这里可以添加参数应用逻辑
-                    alert('参数已应用: omega=' + omega + ', t0=' + t0 + ', threshold=' + threshold);
-                }
-            });
-        }
+        document.getElementById('applyParamsBtn').addEventListener('click', function() {
+            const omega = document.getElementById('omegaSlider').value / 100;
+            const t0 = document.getElementById('t0Slider').value / 100;
+            const threshold = document.getElementById('thresholdSlider').value;
+            
+            // 这里可以添加参数应用逻辑
+            alert(`参数已应用: omega=${omega}, t0=${t0}, threshold=${threshold}`);
+        });
         
         // 初始化
-        window.onload = function() {
-            // 确保DOM元素加载完成后再调用这些函数
-            updateStatus();
-            loadVideoFiles();
-        };
+        updateStatus();
+        loadVideoFiles();
     </script>
 </body>
 </html>

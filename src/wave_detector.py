@@ -1,673 +1,379 @@
-"""带钢浪形检测模块"""
-
 import cv2
 import numpy as np
-from typing import Dict, Tuple, List, Optional
-
-# 尝试导入YOLOv8模型
-try:
-    from ultralytics import YOLO
-    has_yolo = True
-except ImportError:
-    has_yolo = False
-
+from collections import deque
 
 class WaveDetector:
-    """带钢浪形检测类"""
-    
-    def __init__(self, config: Dict = None):
-        """初始化检测参数
+    def __init__(self):
+        # 默认参数
+        self.omega = 0.8
+        self.t0 = 0.25
+        self.binary_threshold = 120
         
-        Args:
-            config: 检测配置参数
+        # ==========================================
+        # 模块 1：系统核心参数与状态机初始化
+        # ==========================================
+        
+        # 1. 浪形振幅报警阈值：
+        # 超过此值（像素级的高度差）即判定为浪形。配合时间平滑算法，4.5 是一个兼顾灵敏与稳定的值。
+        self.wave_amplitude_threshold = 4.5  
+        
+        # 2. 滑动窗口（时间平滑）系统：用于消除单帧画面的闪烁与误报
+        self.history_frames = 15  # 记录最近 15 帧的数据 (在 30fps 下约等于 0.5 秒)
+        # deque(双端队列)：当存满 15 个数据后，新数据进入会自动挤出最老的数据，非常适合做滑动平均
+        self.ws_amp_history = deque(maxlen=self.history_frames) # 操作侧 (上方) 振幅历史
+        self.ds_amp_history = deque(maxlen=self.history_frames) # 传动侧 (下方) 振幅历史
+        
+        # 3. 动态 ROI (感兴趣区域) 与状态记录器
+        self.roi_locked = False   # 标志位：当前是否已经锁定了带钢所在的纵向区域
+        self.roi_top = 0          # 锁定区域的上边界 Y 坐标
+        self.roi_bottom = 0       # 锁定区域的下边界 Y 坐标
+        self.stable_frames = 0    # 记录带钢在画面中稳定存在了多少帧（用于头尾过滤）
+        
+        # 4. 像素到毫米的转换系数（根据实际相机参数和距离调整）
+        self.pixel_to_mm = 0.5  # 假设 1 像素 = 0.5 毫米
+        
+        # 5. 浪形等级阈值
+        self.wave_levels = {
+            "低": 4.5,
+            "中": 8.0,
+            "高": 12.0
+        }
+    
+    def set_parameters(self, omega, t0, binary_threshold):
+        """设置参数"""
+        self.omega = omega
+        self.t0 = t0
+        self.binary_threshold = binary_threshold
+
+    # ==========================================
+    # 模块 2：核心数学信号处理工具
+    # ==========================================
+    
+    def dark_channel_prior(self, img, size=15):
         """
-        self.config = config or {}
-        self.detect_config = self.config.get('detection', {})
-        
-        # 浪形等级阈值
-        self.wave_levels = self.detect_config.get('wave_levels', {
-            'low': 1.0,
-            'medium': 2.0,
-            'high': 3.0
-        })
-        
-        # 加载YOLOv8模型（如果使用）
-        self.yolo_model = None
-        # 加载预训练的YOLOv8模型
-        if has_yolo:
-            try:
-                import os
-                model_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'yolov8_steel_coil.pt')
-                if os.path.exists(model_path):
-                    self.yolo_model = YOLO(model_path)
-                    print(f"成功加载YOLO模型: {model_path}")
-                else:
-                    print(f"YOLO模型文件不存在: {model_path}")
-            except Exception as e:
-                print(f"加载YOLO模型失败: {e}")
-        
-        # 时序优化参数
-        self.history_size = 10  # 历史帧数量
-        self.history = []  # 历史检测结果
-        self.optical_flow = None  # 光流对象
-        self.last_frame = None  # 上一帧图像
+        暗通道去雾算法
+        """
+        min_channel = np.min(img, axis=2)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (size, size))
+        dark_channel = cv2.erode(min_channel, kernel)
+        return dark_channel
     
-    def detect(self, contour_data: Dict, frame: Optional[np.ndarray] = None) -> Tuple[Dict, Dict]:
+    def dehaze(self, img):
+        """
+        图像去雾
+        """
+        img = img.astype(np.float64) / 255.0
+        dark_channel = self.dark_channel_prior(img)
+        atmospheric_light = np.max(img, axis=(0, 1))
+        transmission = 1 - self.omega * dark_channel / np.max(dark_channel)
+        transmission = np.maximum(transmission, self.t0)
+        
+        result = np.zeros_like(img)
+        for i in range(3):
+            result[:, :, i] = (img[:, :, i] - atmospheric_light[i]) / transmission + atmospheric_light[i]
+        
+        result = np.clip(result, 0, 1) * 255
+        return result.astype(np.uint8)
+    
+    def enhance_contrast(self, img):
+        """
+        CLAHE 对比度增强
+        """
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+        enhanced_lab = cv2.merge((cl, a, b))
+        enhanced_img = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
+        return enhanced_img
+    
+    def smooth_curve(self, curve, window_size=21):
+        """
+        步骤 A：一维信号均值滤波。
+        目的：消除图像形态学处理（开运算）带来的边缘“像素级阶梯/锯齿”，还原带钢真实的平滑轮廓。
+        """
+        window = np.ones(window_size) / window_size
+        pad_len = window_size // 2
+        # 使用 edge 模式进行边缘填充，防止卷积后曲线首尾出现断崖式塌陷
+        padded = np.pad(curve, (pad_len, pad_len), mode='edge')
+        smoothed = np.convolve(padded, window, mode='valid')
+        if len(smoothed) > len(curve):
+            smoothed = smoothed[:len(curve)] # 确保输出与输入长度严格对齐
+        return smoothed
+
+    def calculate_true_amplitude(self, edge_curve, trim_ratio=0.15):
+        """
+        步骤 B：真实振幅计算（抗畸变、抗斜边算法）。
+        目的：剥离摄像头透视畸变和带钢自然下垂的影响，只提取纯粹的浪形起伏。
+        返回：振幅、浪高、浪宽
+        """
+        # 1. 掐头去尾：裁掉左右两端各 15% 的斜边区域，只对带钢中间最核心的 70% 区域进行运算
+        trim_len = int(len(edge_curve) * trim_ratio)
+        if len(edge_curve) > 2 * trim_len and trim_len > 0:
+            valid_curve = edge_curve[trim_len:-trim_len]
+        else:
+            valid_curve = edge_curve
+
+        if len(valid_curve) < 10:
+            return 0.0, 0.0, 0.0
+
+        x = np.arange(len(valid_curve))
+        
+        # 2. 二阶抛物线拟合：找出带钢边缘整体的“趋势线”（哪怕它倾斜或者微微下垂）
+        z = np.polyfit(x, valid_curve, 2)
+        trend_curve = np.polyval(z, x)
+        
+        # 3. 信号去趋势 (Detrending)：实际轮廓 减去 趋势线，将带钢绝对“拉平”
+        detrended = valid_curve - trend_curve
+        
+        # 4. 计算极差：使用 90% 分位数减去 10% 分位数，彻底无视极端毛刺噪点
+        amplitude = np.percentile(detrended, 90) - np.percentile(detrended, 10)
+        
+        # 5. 计算浪高（最大峰值与最小谷值之差）
+        wave_height = np.max(detrended) - np.min(detrended)
+        
+        # 6. 计算浪宽（通过寻找峰值和谷值的位置）
+        wave_width = 0
+        if len(detrended) > 20:
+            # 使用一阶导数找极值点
+            diff = np.diff(detrended)
+            extrema = np.where(np.diff(np.sign(diff)))[0]
+            if len(extrema) >= 2:
+                # 计算相邻极值点之间的距离
+                widths = np.diff(extrema)
+                wave_width = np.mean(widths) if len(widths) > 0 else 0
+        
+        return amplitude, wave_height, wave_width
+
+    # ==========================================
+    # 模块 3：主视频帧处理流水线 (每来一帧图执行一次)
+    # ==========================================
+
+    def process_frame(self, frame):
+        import time
+        start_time = time.time()
+        h, w, _ = frame.shape
+        heatmap = np.zeros((h, w, 3), dtype=np.uint8) # 初始化空的热力图
+        status = "未检测到带钢"                       # 初始化默认状态
+        algorithm_time = 0
+        dehazed_frame = frame.copy()  # 初始化去雾后的帧
+        contour_frame = frame.copy()  # 初始化轮廓提取后的帧
+        wave_height = 0.0  # 浪高
+        wave_width = 0.0   # 浪宽
+        wave_level = "无"  # 浪形等级
+
+        # --- 第一步：图像预处理与自适应二值化 ---
+        # 1. 暗通道去雾
+        dehazed_frame = self.dehaze(frame)
+        # 2. CLAHE 对比度增强
+        dehazed_frame = self.enhance_contrast(dehazed_frame)
+        # 3. 使用 HSV 色彩空间，提取 V 通道并使用 Otsu 自适应阈值
+        hsv = cv2.cvtColor(dehazed_frame, cv2.COLOR_BGR2HSV)
+        v_channel = hsv[:, :, 2]
+        # 4. 双边滤波：平滑噪声的同时保留边缘
+        v_channel = cv2.bilateralFilter(v_channel, 9, 75, 75)
+        # 5. 二值化 - 提高阈值以突出亮白红色的带钢区域
+        _, mask = cv2.threshold(v_channel, self.binary_threshold, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU) 
+
+        # --- 第二步：物理空间隔离与形态学去雾 ---
+        if self.roi_locked:
+            # 如果已经锁定了带钢轨道：暴力抹黑轨道上下的所有区域，彻底物理隔绝大面积水雾
+            mask[0:self.roi_top, :] = 0
+            mask[self.roi_bottom:h, :] = 0
+            # 使用宽扁核(15, 5)切断带钢下边缘与辊道的垂直反光粘连
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5))
+        else:
+            # 没锁定前：使用大尺寸核(25, 15)强力去除全屏的丝状水雾，以便寻找第一块主钢板
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 15))
+            
+        # 形态学开运算：先腐蚀（消灭细小噪点），再膨胀（恢复主体形状）
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        # 形态学闭运算：填充内部孔洞
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
+
+        # --- 第三步：轮廓提取与目标确认 ---
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        depth_map = np.zeros((h, w), dtype=np.uint8) # 初始化空的高度图矩阵
+
+        if contours:
+            # 找到画面中面积最大的连通域
+            largest_contour = max(contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest_contour)
+            x, y, bw, bh = cv2.boundingRect(largest_contour)
+            
+            # 计算轮廓实心度（面积与凸包面积的比例）
+            hull = cv2.convexHull(largest_contour)
+            hull_area = cv2.contourArea(hull)
+            solidity = float(area) / hull_area if hull_area > 0 else 0
+            
+            # 条件确认：面积够大 (>15000) 且 宽度占画面的 30% 以上，且实心度大于 0.8，才确认为真正的带钢
+            if area > 15000 and bw > w * 0.3 and solidity > 0.8: 
+                
+                # --- 第四步：触发 ROI 锁定系统 ---
+                if not self.roi_locked:
+                    margin = 30 # 上下预留 30 像素的容错空间
+                    self.roi_top = max(0, y - margin)
+                    self.roi_bottom = min(h, y + bh + margin)
+                    self.roi_locked = True
+                    self.stable_frames = 0 # 新带钢咬钢，重置稳定计数
+                    # 清空上一根带钢遗留的历史振幅数据
+                    self.ws_amp_history.clear()
+                    self.ds_amp_history.clear()
+                
+                self.stable_frames += 1 # 稳定帧数递增
+                
+                # --- 第五步：提取带钢精确边缘曲线 ---
+                plate_mask = mask[y:y+bh, x:x+bw]
+                valid_cols = np.any(plate_mask > 0, axis=0) # 找出有非黑像素的有效列
+                
+                if np.sum(valid_cols) > 50: # 有效列足够多才进行计算
+                    # argmax 寻找每列第一个非零像素点，获取最原始的上下边缘坐标
+                    top_edge_raw = np.argmax(plate_mask[:, valid_cols], axis=0)
+                    bottom_edge_raw = bh - np.argmax(plate_mask[::-1, valid_cols], axis=0)
+                    
+                    # 调用工具函数，对原始边缘进行一维滤波磨皮
+                    top_edge_smooth = self.smooth_curve(top_edge_raw, window_size=21)
+                    bottom_edge_smooth = self.smooth_curve(bottom_edge_raw, window_size=21)
+                    
+                    # --- 第六步：过渡区延时启动与状态判定 ---
+                    # 设定 30 帧 (约 1 秒) 作为缓冲期。等待带钢彻底进入画面且水雾散开
+                    is_stable_body = (self.stable_frames > 30)
+                    
+                    if is_stable_body:
+                        # 1. 计算当前单帧的真实振幅（已去除畸变）
+                        raw_ws_amp, ws_wave_height, ws_wave_width = self.calculate_true_amplitude(top_edge_smooth)
+                        raw_ds_amp, ds_wave_height, ds_wave_width = self.calculate_true_amplitude(bottom_edge_smooth)
+                        
+                        # 2. 计算实际浪高浪宽（转换为毫米）
+                        wave_height = max(ws_wave_height, ds_wave_height) * self.pixel_to_mm
+                        wave_width = max(ws_wave_width, ds_wave_width) * self.pixel_to_mm
+                        
+                        # 3. 确定浪形等级
+                        if wave_height < self.wave_levels["低"]:
+                            wave_level = "无"
+                        elif wave_height < self.wave_levels["中"]:
+                            wave_level = "低"
+                        elif wave_height < self.wave_levels["高"]:
+                            wave_level = "中"
+                        else:
+                            wave_level = "高"
+                        
+                        # 4. 存入历史队列
+                        self.ws_amp_history.append(raw_ws_amp)
+                        self.ds_amp_history.append(raw_ds_amp)
+                        
+                        # 5. 计算最近一段时间的平均振幅（防闪烁）
+                        smooth_ws_amp = np.mean(self.ws_amp_history)
+                        smooth_ds_amp = np.mean(self.ds_amp_history)
+                        
+                        # 6. 根据平滑后的振幅与阈值比对，输出最终的工业报警信号
+                        if smooth_ws_amp > self.wave_amplitude_threshold and smooth_ds_amp > self.wave_amplitude_threshold:
+                            status = f"双边浪 (报警)"
+                        elif smooth_ws_amp > self.wave_amplitude_threshold:
+                            status = f"WS侧单边浪 (报警)"
+                        elif smooth_ds_amp > self.wave_amplitude_threshold:
+                            status = f"DS侧单边浪 (报警)"
+                        else:
+                            status = "平直"
+                    else:
+                        # 在刚咬钢的 1 秒内，强制休眠检测逻辑，输出过渡区
+                        status = "过渡区"
+
+                    # --- 第七步：3D 深度贴图重构 (Clean Mask 重绘) ---
+                    # 彻底丢弃带有毛刺的原始轮廓，用完美的平滑曲线在黑板上重新“画”出一个带钢
+                    clean_mask = np.zeros_like(plate_mask)
+                    valid_indices = np.where(valid_cols)[0]
+                    
+                    for i, col in enumerate(valid_indices):
+                        t = int(top_edge_smooth[i])
+                        # 底部往上强行提 8 个像素，彻底切掉下巴上可能的传送带残影
+                        b = int(bottom_edge_smooth[i]) - 8 
+                        t = max(0, min(bh-1, t)) # 越界保护
+                        b = max(0, min(bh-1, b))
+                        if b > t:
+                            clean_mask[t:b, col] = 255 # 填充白色实心
+                            
+                    # 构造一个立体的纵向高度渐变（让图像有 3D 圆柱表面的隆起感）
+                    gradient = np.linspace(50, 200, bh, dtype=np.float32)
+                    gradient_2d = np.tile(gradient, (bw, 1)).T
+                    simulated_depth = np.clip(gradient_2d, 0, 255).astype(np.uint8)
+                    
+                    # 将深度贴图精确地覆盖到我们刚刚画好的 Clean Mask 上
+                    depth_map[y:y+bh, x:x+bw] = cv2.bitwise_and(simulated_depth, simulated_depth, mask=clean_mask)
+                    
+                else:
+                    status = "未检测到带钢"
+        else:
+            # --- 第八步：抛钢复位系统 ---
+            # 当带钢完全离开画面（没有巨大的亮斑），解除 ROI 锁定，清空所有历史数据
+            self.roi_locked = False
+            self.stable_frames = 0
+            self.ws_amp_history.clear()
+            self.ds_amp_history.clear()
+
+        # 计算算法处理时间
+        algorithm_time = (time.time() - start_time) * 1000
+
+        # 生成轮廓提取后的帧
+        contour_frame = dehazed_frame.copy()
+        if contours:
+            # 在轮廓提取后的帧上绘制轮廓
+            cv2.drawContours(contour_frame, contours, -1, (0, 255, 0), 2)
+            # 如果有最大轮廓，绘制其边界框
+            if 'largest_contour' in locals():
+                x, y, bw, bh = cv2.boundingRect(largest_contour)
+                cv2.rectangle(contour_frame, (x, y), (x + bw, y + bh), (0, 0, 255), 2)
+
+        # --- 第九步：伪彩色热力图渲染 ---
+        if status != "未检测到带钢":
+            # 将灰度的深度贴图，转换为 Jet 伪彩色（红高蓝低），极具工业检测仪表的质感
+            heatmap = cv2.applyColorMap(depth_map, cv2.COLORMAP_JET)
+            # 将没有钢板的背景区域强制设回纯黑
+            heatmap[depth_map == 0] = [0, 0, 0] 
+
+        # 保存边缘数据
+        edge_data = {
+            'top_edge_raw': top_edge_raw.tolist() if 'top_edge_raw' in locals() else [],
+            'bottom_edge_raw': bottom_edge_raw.tolist() if 'bottom_edge_raw' in locals() else [],
+            'top_edge_smooth': top_edge_smooth.tolist() if 'top_edge_smooth' in locals() else [],
+            'bottom_edge_smooth': bottom_edge_smooth.tolist() if 'bottom_edge_smooth' in locals() else [],
+            'valid_cols': valid_cols.tolist() if 'valid_cols' in locals() else []
+        }
+        
+        # 返回渲染好的图像、检测状态、处理时间、去雾后的帧和轮廓提取后的帧，交由前端 UI 进行显示
+        return heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data
+    
+    def detect(self, contour_data, frame):
         """检测浪形
         
         Args:
             contour_data: 轮廓数据
-            frame: 当前帧图像（用于光流计算）
-        
-        Returns:
-            浪形检测结果和检测信息
-        """
-        info = {}
-        
-        # 检查输入
-        if not contour_data:
-            info['error'] = '无效输入'
-            return {}, info
-        
-        # 计算浪形参数
-        wave_params = self._calculate_wave_parameters(contour_data)
-        info.update(wave_params)
-        
-        # 分类浪形类型
-        wave_type = self._classify_wave_type(contour_data, wave_params)
-        info['wave_type'] = wave_type
-        
-        # 分级浪形
-        wave_level = self._classify_wave_level(wave_params.get('wave_height', 0))
-        info['wave_level'] = wave_level
-        
-        # 检测复合浪形
-        composite_wave = self._detect_composite_wave(contour_data, wave_params)
-        if composite_wave:
-            info['composite_wave'] = composite_wave
-        
-        # 构建检测结果
-        result = {
-            'wave_type': wave_type,
-            'wave_level': wave_level,
-            'wave_height': wave_params.get('wave_height', 0),
-            'wave_width': wave_params.get('wave_width', 0),
-            'wave_position': wave_params.get('wave_position', {}),
-            'composite_wave': composite_wave
-        }
-        
-        # 时序优化
-        if frame is not None:
-            result, info = self._temporal_optimization(result, frame, info)
-        
-        # 保存到历史记录
-        self._update_history(result)
-        
-        return result, info
-    
-    def _calculate_wave_parameters(self, contour_data: Dict) -> Dict:
-        """计算浪形参数
-        
-        Args:
-            contour_data: 轮廓数据
-        
-        Returns:
-            浪形参数
-        """
-        params = {}
-        
-        # 从轮廓数据中获取高度差
-        height_diff = contour_data.get('height_diff', [])
-        if len(height_diff) == 0:
-            return params
-        
-        # 计算浪高
-        max_height = np.max(height_diff)
-        min_height = np.min(height_diff)
-        wave_height = max_height - min_height
-        params['wave_height'] = round(wave_height, 2)
-        
-        # 计算浪宽
-        center_line = contour_data.get('center_line', [])
-        if len(center_line) > 0:
-            # 找到波峰和波谷位置
-            peaks = self._find_peaks(height_diff)
-            valleys = self._find_valleys(height_diff)
-            
-            if len(peaks) > 1:
-                # 计算平均浪宽
-                peak_positions = np.array(peaks) * self.config.get('calibration', {}).get('pixel_to_mm', {}).get('y', 0.11)
-                wave_widths = np.diff(peak_positions)
-                avg_wave_width = np.mean(wave_widths)
-                params['wave_width'] = round(avg_wave_width, 2)
-            
-            # 计算浪形位置
-            if peaks:
-                max_peak_idx = peaks[np.argmax(height_diff[peaks])]
-                max_peak_pos = center_line[max_peak_idx]
-                params['wave_position'] = {
-                    'x': round(max_peak_pos[0] * self.config.get('calibration', {}).get('pixel_to_mm', {}).get('x', 0.1), 2),
-                    'y': round(max_peak_pos[1] * self.config.get('calibration', {}).get('pixel_to_mm', {}).get('y', 0.11), 2)
-                }
-        
-        return params
-    
-    def _classify_wave_type(self, contour_data: Dict, wave_params: Dict) -> str:
-        """分类浪形类型
-        
-        Args:
-            contour_data: 轮廓数据
-            wave_params: 浪形参数
-        
-        Returns:
-            浪形类型
-        """
-        # 检查是否有足够的数据
-        height_diff = contour_data.get('height_diff', [])
-        if len(height_diff) == 0:
-            return '未知'
-        
-        # 计算浪高
-        wave_height = wave_params.get('wave_height', 0)
-        if wave_height < self.detect_config.get('parameters', {}).get('min_wave_height', 0.5):
-            return '平直'
-        
-        # 分析高度分布
-        center_line = contour_data.get('center_line', [])
-        left_edge = contour_data.get('left_edge', [])
-        right_edge = contour_data.get('right_edge', [])
-        
-        if len(center_line) == 0 or len(left_edge) == 0 or len(right_edge) == 0:
-            return '未知'
-        
-        # 计算左右边缘的高度差异
-        left_width = np.linalg.norm(right_edge - left_edge, axis=1)
-        right_width = np.linalg.norm(right_edge - left_edge, axis=1)
-        
-        # 计算宽度变化率
-        width_change = np.diff(left_width)
-        if len(width_change) == 0:
-            return '未知'
-        
-        # 分析宽度变化模式
-        max_change = np.max(np.abs(width_change))
-        avg_change = np.mean(np.abs(width_change))
-        
-        # 基于变化模式分类浪形
-        if max_change < 0.5:
-            return '平直'
-        elif self._is_edge_wave(left_width, right_width):
-            # 进一步判断是DS还是WS单边浪
-            if self._is_ds_edge_wave(left_width):
-                return 'DS单边浪'
-            else:
-                return 'WS单边浪'
-        elif self._is_center_wave(left_width):
-            return '中浪'
-        elif self._is_double_edge_wave(left_width, right_width):
-            return '双边浪'
-        else:
-            return '未知'
-    
-    def _classify_wave_level(self, wave_height: float) -> str:
-        """分级浪形
-        
-        Args:
-            wave_height: 浪高
-        
-        Returns:
-            浪形等级
-        """
-        if wave_height < self.wave_levels.get('low', 1.0):
-            return '低'
-        elif wave_height < self.wave_levels.get('medium', 2.0):
-            return '中'
-        elif wave_height < self.wave_levels.get('high', 3.0):
-            return '高'
-        else:
-            return '严重'
-    
-    def _detect_composite_wave(self, contour_data: Dict, wave_params: Dict) -> List[str]:
-        """检测复合浪形
-        
-        Args:
-            contour_data: 轮廓数据
-            wave_params: 浪形参数
-        
-        Returns:
-            复合浪形类型列表
-        """
-        composite = []
-        
-        # 这里可以实现复合浪形的检测逻辑
-        # 例如同时检测到边浪和中浪
-        
-        return composite
-    
-    def _find_peaks(self, data: np.ndarray) -> List[int]:
-        """查找波峰
-        
-        Args:
-            data: 数据序列
-        
-        Returns:
-            波峰索引列表
-        """
-        peaks = []
-        for i in range(1, len(data) - 1):
-            if data[i] > data[i-1] and data[i] > data[i+1]:
-                peaks.append(i)
-        return peaks
-    
-    def _find_valleys(self, data: np.ndarray) -> List[int]:
-        """查找波谷
-        
-        Args:
-            data: 数据序列
-        
-        Returns:
-            波谷索引列表
-        """
-        valleys = []
-        for i in range(1, len(data) - 1):
-            if data[i] < data[i-1] and data[i] < data[i+1]:
-                valleys.append(i)
-        return valleys
-    
-    def _is_edge_wave(self, left_width: np.ndarray, right_width: np.ndarray) -> bool:
-        """判断是否为边浪
-        
-        Args:
-            left_width: 左边宽度序列
-            right_width: 右边宽度序列
-        
-        Returns:
-            是否为边浪
-        """
-        # 计算左右宽度的差异
-        width_diff = np.abs(left_width - right_width)
-        avg_diff = np.mean(width_diff)
-        
-        return avg_diff > 0.5
-    
-    def _is_ds_edge_wave(self, width: np.ndarray) -> bool:
-        """判断是否为DS单边浪
-        
-        Args:
-            width: 宽度序列
-        
-        Returns:
-            是否为DS单边浪
-        """
-        # DS单边浪通常表现为宽度从左到右逐渐增加
-        trend = np.polyfit(range(len(width)), width, 1)[0]
-        return trend > 0.01
-    
-    def _is_center_wave(self, width: np.ndarray) -> bool:
-        """判断是否为中浪
-        
-        Args:
-            width: 宽度序列
-        
-        Returns:
-            是否为中浪
-        """
-        # 中浪通常表现为宽度中间大两边小
-        # 拟合二次曲线
-        if len(width) < 3:
-            return False
-        
-        coeffs = np.polyfit(range(len(width)), width, 2)
-        # 二次项系数为负表示中间高两边低
-        return coeffs[0] < -0.001
-    
-    def _is_double_edge_wave(self, left_width: np.ndarray, right_width: np.ndarray) -> bool:
-        """判断是否为双边浪
-        
-        Args:
-            left_width: 左边宽度序列
-            right_width: 右边宽度序列
-        
-        Returns:
-            是否为双边浪
-        """
-        # 双边浪通常表现为左右两边宽度都有较大变化
-        left_change = np.max(np.abs(np.diff(left_width)))
-        right_change = np.max(np.abs(np.diff(right_width)))
-        
-        return left_change > 0.5 and right_change > 0.5
-    
-    def validate_detection(self, result: Dict) -> bool:
-        """验证检测结果
-        
-        Args:
-            result: 检测结果
-        
-        Returns:
-            检测结果是否有效
-        """
-        # 检查浪高是否在合理范围内
-        wave_height = result.get('wave_height', 0)
-        if wave_height < 0 or wave_height > 50:  # 50mm为合理最大值
-            return False
-        
-        # 检查浪宽是否在合理范围内
-        wave_width = result.get('wave_width', 0)
-        if wave_width < 0 or wave_width > 1000:  # 1000mm为合理最大值
-            return False
-        
-        return True
-    
-    def detect_from_frame(self, frame: np.ndarray) -> tuple:
-        """从帧图像检测浪形
-        
-        Args:
             frame: 输入帧图像
         
         Returns:
-            (浪形类型, 浪高, 水平偏差)
+            (检测结果, 检测信息)
         """
-        # 使用YOLOv8模型检测卷钢
-        steel_coil_region = None
-        if self.yolo_model:
-            try:
-                results = self.yolo_model(frame)
-                for result in results:
-                    boxes = result.boxes
-                    for box in boxes:
-                        x1, y1, x2, y2 = box.xyxy[0]
-                        confidence = box.conf[0]
-                        if confidence > 0.5:
-                            # 提取卷钢区域
-                            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-                            steel_coil_region = frame[y1:y2, x1:x2]
-                            break
-            except Exception as e:
-                print(f"YOLO检测失败: {e}")
+        # 调用process_frame处理帧
+        heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data = self.process_frame(frame)
         
-        # 如果YOLO检测失败，使用颜色-based检测作为 fallback
-        if steel_coil_region is None:
-            # 颜色-based检测
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([0, 50, 50])
-            upper_red1 = np.array([15, 255, 255])
-            lower_red2 = np.array([150, 50, 50])
-            upper_red2 = np.array([180, 255, 255])
-            
-            mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-            mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-            mask = mask1 | mask2
-            
-            # 查找轮廓
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if contours:
-                # 找到最大的轮廓
-                largest_contour = max(contours, key=cv2.contourArea)
-                x, y, w, h = cv2.boundingRect(largest_contour)
-                if w > 100 and h > 50:
-                    steel_coil_region = frame[y:y+h, x:x+w]
-        
-        # 如果找到了卷钢区域，进行边缘检测和浪形分析
-        if steel_coil_region is not None:
-            # 边缘检测
-            edges = self._detect_edges(steel_coil_region)
-            
-            # 形状分析
-            wave_type, wave_height, h_err = self._analyze_shape(edges, steel_coil_region.shape)
-            
-            return wave_type, wave_height, h_err
-        else:
-            # 未检测到卷钢
-            return '未检测到卷钢', 0, 0
-    
-    def _detect_edges(self, image: np.ndarray) -> np.ndarray:
-        """检测图像边缘
-        
-        Args:
-            image: 输入图像
-        
-        Returns:
-            边缘图像
-        """
-        # 转换为灰度图
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # 高斯模糊
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        
-        # Canny边缘检测
-        edges = cv2.Canny(blur, 50, 150)
-        
-        # 膨胀操作，连接断裂的边缘
-        kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=1)
-        
-        return edges
-    
-    def _analyze_shape(self, edges: np.ndarray, image_shape: tuple) -> tuple:
-        """分析边缘形状，检测浪形
-        
-        Args:
-            edges: 边缘图像
-            image_shape: 图像形状
-        
-        Returns:
-            (浪形类型, 浪高, 水平偏差)
-        """
-        # 查找轮廓
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        if not contours:
-            return '平直', 0, 0
-        
-        # 找到最大的轮廓
-        largest_contour = max(contours, key=cv2.contourArea)
-        
-        # 计算轮廓的边界框
-        x, y, w, h = cv2.boundingRect(largest_contour)
-        
-        # 计算轮廓的高度变化
-        height_profile = []
-        for i in range(x, x + w, 10):
-            # 提取垂直线上的边缘点
-            line = edges[:, i]
-            edge_points = np.where(line > 0)[0]
-            if len(edge_points) > 0:
-                # 计算该列的高度（最大y - 最小y）
-                height = np.max(edge_points) - np.min(edge_points)
-                height_profile.append(height)
-            else:
-                height_profile.append(0)
-        
-        # 计算浪高
-        if height_profile:
-            max_height = np.max(height_profile)
-            min_height = np.min(height_profile)
-            # 使用配置文件中的像素到毫米转换参数
-            pixel_to_mm = self.config.get('calibration', {}).get('pixel_to_mm', {}).get('y', 0.11)
-            wave_height = (max_height - min_height) * pixel_to_mm  # 转换为毫米
-            wave_height = round(wave_height, 2)
-        else:
-            wave_height = 0
-        
-        # 分析浪形类型
-        if wave_height < 0.5:
-            return '平直', wave_height, 0
-        
-        # 计算水平偏差
-        # 假设卷钢应该是水平的，计算轮廓的倾斜度
-        [vx, vy, x0, y0] = cv2.fitLine(largest_contour, cv2.DIST_L2, 0, 0.01, 0.01)
-        angle = np.arctan2(vy, vx) * 180 / np.pi
-        h_err = round(angle, 2)
-        
-        # 分析高度分布，判断浪形类型
-        if len(height_profile) > 3:
-            # 计算高度分布的标准差
-            std_height = np.std(height_profile)
-            
-            # 计算高度分布的趋势
-            trend = np.polyfit(range(len(height_profile)), height_profile, 1)[0]
-            
-            # 计算高度分布的二次曲线系数
-            coeffs = np.polyfit(range(len(height_profile)), height_profile, 2)
-            
-            # 判断浪形类型
-            if std_height < 10:
-                return '平直', wave_height, h_err
-            elif abs(trend) > 0.5:
-                # 单边浪
-                if trend > 0:
-                    return 'DS单边浪', wave_height, h_err
-                else:
-                    return 'WS单边浪', wave_height, h_err
-            elif coeffs[0] < -0.01:
-                # 中浪（中间高两边低）
-                return '中浪', wave_height, h_err
-            elif coeffs[0] > 0.01:
-                # 双边浪（两边高中间低）
-                return '双边浪', wave_height, h_err
-            else:
-                return '平直', wave_height, h_err
-        else:
-            return '平直', wave_height, h_err
-    
-    def get_wave_info(self, shape: str, height: float, h_err: float) -> dict:
-        """获取浪形信息
-        
-        Args:
-            shape: 浪形类型
-            height: 浪高
-            h_err: 水平偏差
-        
-        Returns:
-            浪形信息字典
-        """
-        return {
-            'wave_type': shape,
-            'wave_height': height,
-            'horizontal_error': h_err
+        # 构建检测结果
+        detection_result = {
+            'wave_type': status,
+            'wave_level': wave_level,
+            'wave_height': wave_height,
+            'wave_width': wave_width,
+            'wave_position': {'x': 0, 'y': 0}
         }
-    
-    def _update_history(self, result: Dict):
-        """更新历史记录
         
-        Args:
-            result: 当前检测结果
-        """
-        self.history.append(result)
-        if len(self.history) > self.history_size:
-            self.history.pop(0)
-    
-    def _calculate_optical_flow(self, current_frame: np.ndarray) -> Optional[np.ndarray]:
-        """计算光流
+        # 构建检测信息
+        detect_info = {
+            'algorithm_time': algorithm_time,
+            'status': status,
+            'wave_height': wave_height,
+            'wave_width': wave_width,
+            'wave_level': wave_level,
+            'edge_data': edge_data
+        }
         
-        Args:
-            current_frame: 当前帧图像
-        
-        Returns:
-            光流场
-        """
-        if self.last_frame is None:
-            self.last_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-            return None
-        
-        current_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-        
-        # 使用Farneback光流算法
-        flow = cv2.calcOpticalFlowFarneback(
-            self.last_frame, current_gray, None,
-            0.5, 3, 15, 3, 5, 1.2, 0
-        )
-        
-        self.last_frame = current_gray.copy()
-        return flow
-    
-    def _smooth_detection(self, result: Dict) -> Dict:
-        """平滑检测结果
-        
-        Args:
-            result: 当前检测结果
-        
-        Returns:
-            平滑后的检测结果
-        """
-        if len(self.history) < 3:
-            return result
-        
-        # 平滑浪高
-        if 'wave_height' in result:
-            heights = [h.get('wave_height', 0) for h in self.history]
-            heights.append(result['wave_height'])
-            result['wave_height'] = round(np.mean(heights[-5:]), 2)
-        
-        # 平滑浪宽
-        if 'wave_width' in result:
-            widths = [w.get('wave_width', 0) for w in self.history]
-            widths.append(result['wave_width'])
-            result['wave_width'] = round(np.mean(widths[-5:]), 2)
-        
-        # 平滑位置
-        if 'wave_position' in result and result['wave_position']:
-            positions = [p.get('wave_position', {}) for p in self.history]
-            positions.append(result['wave_position'])
-            
-            valid_positions = [p for p in positions if p]
-            if len(valid_positions) > 2:
-                avg_x = np.mean([p['x'] for p in valid_positions[-5:]])
-                avg_y = np.mean([p['y'] for p in valid_positions[-5:]])
-                result['wave_position'] = {
-                    'x': round(avg_x, 2),
-                    'y': round(avg_y, 2)
-                }
-        
-        # 平滑浪形类型（使用多数投票）
-        if 'wave_type' in result:
-            types = [t.get('wave_type', '未知') for t in self.history]
-            types.append(result['wave_type'])
-            
-            # 统计频率
-            type_counts = {}
-            for t in types[-8:]:
-                type_counts[t] = type_counts.get(t, 0) + 1
-            
-            # 选择最常见的类型
-            if type_counts:
-                most_common = max(type_counts, key=type_counts.get)
-                result['wave_type'] = most_common
-        
-        return result
-    
-    def _temporal_optimization(self, result: Dict, frame: np.ndarray, info: Dict) -> Tuple[Dict, Dict]:
-        """时序优化
-        
-        Args:
-            result: 当前检测结果
-            frame: 当前帧图像
-            info: 检测信息
-        
-        Returns:
-            优化后的检测结果和信息
-        """
-        # 计算光流
-        flow = self._calculate_optical_flow(frame)
-        if flow is not None:
-            info['optical_flow_calculated'] = True
-            # 可以使用光流信息来优化检测结果
-            # 例如，预测浪形的运动方向和速度
-        
-        # 平滑检测结果
-        result = self._smooth_detection(result)
-        info['temporal_optimized'] = True
-        
-        # 前后帧对比，过滤异常值
-        if len(self.history) > 0:
-            previous = self.history[-1]
-            # 检查浪高变化是否异常
-            if 'wave_height' in result and 'wave_height' in previous:
-                height_diff = abs(result['wave_height'] - previous['wave_height'])
-                if height_diff > 3:  # 超过3mm的变化视为异常
-                    # 使用历史平均值
-                    result['wave_height'] = previous['wave_height']
-                    info['height_anomaly_corrected'] = True
-        
-        return result, info
+        return detection_result, detect_info

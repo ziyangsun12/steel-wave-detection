@@ -11,11 +11,7 @@ import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
-from src.preprocessing import Preprocessor
-from src.reconstruction_3d import Reconstructor
 from src.wave_detector import WaveDetector
-from src.visualization import Visualizer
-from src.utils import Utils
 
 
 class Pipeline:
@@ -32,11 +28,7 @@ class Pipeline:
         self.output_config = config.get('output', {})
         
         # 初始化各模块
-        self.preprocessor = Preprocessor(config)
-        self.reconstructor = Reconstructor(config)
-        self.detector = WaveDetector(config)
-        self.visualizer = Visualizer(config)
-        self.utils = Utils(config)
+        self.detector = WaveDetector()
         
         # 初始化队列
         self.frame_queue = queue.Queue(maxsize=10)  # 进一步减少队列大小，减少内存使用
@@ -56,6 +48,11 @@ class Pipeline:
         self.csv_writer = None
         self.csv_file = None
         self.json_file = None
+        
+        # 视频控制
+        self.cap = None
+        self.video_path = None
+        self.total_frames = 0
         
         # 初始化日志
         self._init_logging()
@@ -231,85 +228,34 @@ class Pipeline:
         """
         start_time = time.time()
         
-        # 异常检测
-        exception_info = self._detect_exceptions(frame)
-        if exception_info['has_exception']:
-            # 计算性能
-            process_time = time.time() - start_time
-            
-            # 更新FPS
-            self.frame_count += 1
-            self.total_processed_frames += 1
-            current_time = time.time()
-            if current_time - self.last_time > 1.0:
-                self.fps = self.frame_count / (current_time - self.last_time)
-                self.frame_count = 0
-                self.last_time = current_time
-            
-            # 构建结果
-            result = {
-                'frame': frame,
-                'binary': None,
-                'mask': None,
-                'contour_data': {},
-                'detection_result': {},
-                'info': {
-                    'exception': exception_info,
-                    'process_time': process_time,
-                    'fps': self.fps
-                }
-            }
-            return result
-        
-        # 预处理
-        binary, preprocess_info = self.preprocessor.preprocess(frame)
-        
-        # 分割带钢
-        mask, segment_info = self.preprocessor.segment_steel(frame)
-        
-        # 检查是否有带钢
-        if segment_info.get('no_steel', False):
-            # 计算性能
-            process_time = time.time() - start_time
-            
-            # 更新FPS
-            self.frame_count += 1
-            self.total_processed_frames += 1
-            current_time = time.time()
-            if current_time - self.last_time > 1.0:
-                self.fps = self.frame_count / (current_time - self.last_time)
-                self.frame_count = 0
-                self.last_time = current_time
-            
-            # 构建结果
-            result = {
-                'frame': frame,
-                'binary': binary,
-                'mask': mask,
-                'contour_data': {},
-                'detection_result': {},
-                'info': {
-                    'preprocess': preprocess_info,
-                    'segment': segment_info,
-                    'reconstruct': {},
-                    'detect': {},
-                    'process_time': process_time,
-                    'fps': self.fps
-                }
-            }
-            return result
-        
-        # 三维重建
-        contour_data, reconstruct_info = self.reconstructor.reconstruct(binary, mask)
-        
         # 浪形检测
-        detection_result, detect_info = self.detector.detect(contour_data, frame)
+        heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data = self.detector.process_frame(frame)
+        
+        # 构建检测结果
+        detection_result = {
+            'wave_type': status,
+            'wave_level': wave_level,
+            'wave_height': wave_height,
+            'wave_width': wave_width,
+            'wave_position': {'x': 0, 'y': 0}
+        }
+        
+        # 构建检测信息
+        detect_info = {
+            'algorithm_time': algorithm_time,
+            'status': status,
+            'wave_height': wave_height,
+            'wave_width': wave_width,
+            'wave_level': wave_level,
+            'edge_data': edge_data
+        }
         
         # 计算性能
         process_time = time.time() - start_time
         
         # 更新FPS
         self.frame_count += 1
+        self.total_processed_frames += 1
         current_time = time.time()
         if current_time - self.last_time > 1.0:
             self.fps = self.frame_count / (current_time - self.last_time)
@@ -319,14 +265,11 @@ class Pipeline:
         # 构建结果
         result = {
             'frame': frame,
-            'binary': binary,
-            'mask': mask,
-            'contour_data': contour_data,
+            'dehazed_frame': dehazed_frame,
+            'contour_frame': contour_frame,
+            'heatmap': heatmap,
             'detection_result': detection_result,
             'info': {
-                'preprocess': preprocess_info,
-                'segment': segment_info,
-                'reconstruct': reconstruct_info,
                 'detect': detect_info,
                 'process_time': process_time,
                 'fps': self.fps
@@ -395,24 +338,11 @@ class Pipeline:
                 if result is None:
                     break
                 
-                # 可视化
-                vis_frame = self.visualizer.visualize(
-                    result['frame'],
-                    result['contour_data'],
-                    result['detection_result'],
-                    result['info']
-                )
-                
-                # 显示
-                if not self.visualizer.show(vis_frame):
-                    self.running = False
-                
                 # 保存结果
                 self._save_result(result)
                 
                 # 释放大对象内存
                 del result
-                del vis_frame
                 
                 frame_count += 1
                 
@@ -520,14 +450,17 @@ class Pipeline:
         Args:
             video_path: 视频路径
         """
-        cap = cv2.VideoCapture(video_path)
+        self.cap = cv2.VideoCapture(video_path)
+        cap = self.cap
+        self.video_path = video_path
         if not cap.isOpened():
             self.logger.error(f'无法打开视频: {video_path}')
             return
         
         # 获取视频信息
         fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_frames = self.total_frames
         self.logger.info(f'开始处理视频: {video_path}, FPS: {fps}, 总帧数: {total_frames}')
         
         frame_count = 0
@@ -751,8 +684,7 @@ class Pipeline:
         # 关闭输出
         self._close_output()
         
-        # 关闭可视化
-        self.visualizer.close()
+
         
         self.logger.info('Pipeline已停止')
     
@@ -781,3 +713,46 @@ class Pipeline:
             'video_path': self.config.get('camera', {}).get('video_path', ''),
             'processed_frames': self.total_processed_frames
         }
+    
+    def set_frame_position(self, frame_index: int):
+        """设置视频帧位置
+        
+        Args:
+            frame_index: 帧索引
+        """
+        if self.cap and self.running:
+            # 清空队列
+            while not self.frame_queue.empty():
+                try:
+                    self.frame_queue.get_nowait()
+                except queue.Empty:
+                    break
+            
+            # 设置帧位置
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            self.logger.info(f'视频帧位置已设置为: {frame_index}')
+    
+    def get_video_info(self):
+        """获取视频信息
+        
+        Returns:
+            视频信息字典
+        """
+        if self.cap:
+            fps = self.cap.get(cv2.CAP_PROP_FPS)
+            current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+            total_frames = self.total_frames
+            
+            return {
+                'fps': fps,
+                'current_frame': current_frame,
+                'total_frames': total_frames,
+                'video_path': self.video_path
+            }
+        else:
+            return {
+                'fps': 0,
+                'current_frame': 0,
+                'total_frames': 0,
+                'video_path': ''
+            }
