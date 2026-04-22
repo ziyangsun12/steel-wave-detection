@@ -509,7 +509,16 @@ def get_frame_info():
     """获取当前帧信息"""
     global latest_frame_info
     
-    return jsonify({'status': 'success', 'data': latest_frame_info})
+    # 创建一个不包含NumPy数组的副本用于JSON序列化
+    frame_info_for_json = {
+        'status': latest_frame_info.get('status', '未检测到带钢'),
+        'algorithm_time': latest_frame_info.get('algorithm_time', 0),
+        'wave_height': latest_frame_info.get('wave_height', 0),
+        'wave_width': latest_frame_info.get('wave_width', 0),
+        'wave_level': latest_frame_info.get('wave_level', '无')
+    }
+    
+    return jsonify({'status': 'success', 'data': frame_info_for_json})
 
 
 @app.route('/api/update_params', methods=['POST'])

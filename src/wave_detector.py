@@ -167,13 +167,44 @@ class WaveDetector:
         dehazed_frame = self.dehaze(frame)
         # 2. CLAHE 对比度增强
         dehazed_frame = self.enhance_contrast(dehazed_frame)
-        # 3. 使用 HSV 色彩空间，提取 V 通道并使用 Otsu 自适应阈值
+        
+        # 3. 使用 HSV 色彩空间，提取高温带钢的亮色区域（红/橙/黄/白）
         hsv = cv2.cvtColor(dehazed_frame, cv2.COLOR_BGR2HSV)
-        v_channel = hsv[:, :, 2]
+        h_channel = hsv[:, :, 0]  # 色调 (0-180)
+        s_channel = hsv[:, :, 1]  # 饱和度 (0-255)
+        v_channel = hsv[:, :, 2]  # 亮度 (0-255)
+        
         # 4. 双边滤波：平滑噪声的同时保留边缘
-        v_channel = cv2.bilateralFilter(v_channel, 9, 75, 75)
-        # 5. 二值化 - 提高阈值以突出亮白红色的带钢区域
-        _, mask = cv2.threshold(v_channel, self.binary_threshold, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU) 
+        v_channel_filtered = cv2.bilateralFilter(v_channel, 9, 75, 75)
+        
+        # 5. 针对高温带钢的多条件颜色筛选策略：
+        #    高温带钢特征：高亮度 + (低饱和度的白色 OR 红色/橙色/黄色色调)
+        
+        # 条件A：高亮度区域（所有高温颜色的共同特征）
+        bright_mask = v_channel_filtered > 150  # 降低亮度阈值，更容易检测到
+        
+        # 条件B1：低饱和度高亮度（白色/淡色系）
+        white_like = (s_channel < 120) & (v_channel_filtered > 150)
+        
+        # 条件B2：红色调 (H: 0-10 或 170-180) + 中高饱和度 + 高亮度
+        red_tone = ((h_channel <= 10) | (h_channel >= 170)) & (s_channel > 50) & (v_channel_filtered > 130)
+        
+        # 条件B3：橙色调 (H: 11-25) + 中高饱和度 + 高亮度
+        orange_tone = (h_channel > 10) & (h_channel <= 25) & (s_channel > 40) & (v_channel_filtered > 130)
+        
+        # 条件B4：黄色调 (H: 26-35) + 中等饱和度 + 高亮度
+        yellow_tone = (h_channel > 25) & (h_channel <= 35) & (s_channel > 30) & (v_channel_filtered > 140)
+        
+        # 组合所有条件：只要满足任一颜色条件即可
+        color_mask = white_like | red_tone | orange_tone | yellow_tone
+        
+        # 最终掩码：必须是高亮度区域且符合颜色特征
+        mask = (bright_mask & color_mask).astype(np.uint8) * 255
+        
+        # 如果上述方法检测到的区域太小，回退到简化的亮度阈值方法
+        if np.sum(mask) < 5000:  # 如果检测到的区域太小
+            # 简化策略：只使用亮度阈值，更宽松
+            _, mask = cv2.threshold(v_channel_filtered, 140, 255, cv2.THRESH_BINARY) 
 
         # --- 第二步：物理空间隔离与形态学去雾 ---
         if self.roi_locked:
@@ -195,6 +226,7 @@ class WaveDetector:
         # --- 第三步：轮廓提取与目标确认 ---
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         depth_map = np.zeros((h, w), dtype=np.uint8) # 初始化空的高度图矩阵
+        largest_contour = None  # 初始化最大轮廓
 
         if contours:
             # 找到画面中面积最大的连通域
@@ -207,8 +239,9 @@ class WaveDetector:
             hull_area = cv2.contourArea(hull)
             solidity = float(area) / hull_area if hull_area > 0 else 0
             
-            # 条件确认：面积够大 (>15000) 且 宽度占画面的 30% 以上，且实心度大于 0.8，才确认为真正的带钢
-            if area > 15000 and bw > w * 0.3 and solidity > 0.8: 
+            # 条件确认：面积够大 (>10000) 且 宽度占画面的 25% 以上，且实心度大于 0.7，才确认为真正的带钢
+            # 适度放宽条件，确保能检测到各种形态的带钢
+            if area > 10000 and bw > w * 0.25 and solidity > 0.7: 
                 
                 # --- 第四步：触发 ROI 锁定系统 ---
                 if not self.roi_locked:
@@ -315,15 +348,21 @@ class WaveDetector:
         # 计算算法处理时间
         algorithm_time = (time.time() - start_time) * 1000
 
-        # 生成轮廓提取后的帧
+        # 生成轮廓提取后的帧 - 只在确认的带钢上绘制标记
         contour_frame = dehazed_frame.copy()
-        if contours:
-            # 在轮廓提取后的帧上绘制轮廓
-            cv2.drawContours(contour_frame, contours, -1, (0, 255, 0), 2)
-            # 如果有最大轮廓，绘制其边界框
-            if 'largest_contour' in locals():
-                x, y, bw, bh = cv2.boundingRect(largest_contour)
-                cv2.rectangle(contour_frame, (x, y), (x + bw, y + bh), (0, 0, 255), 2)
+        if largest_contour is not None:
+            # 只绘制最大的那个轮廓（真正的带钢），用绿色线条
+            cv2.drawContours(contour_frame, [largest_contour], -1, (0, 255, 0), 3)
+            # 绘制边界框，用红色
+            x, y, bw, bh = cv2.boundingRect(largest_contour)
+            cv2.rectangle(contour_frame, (x, y), (x + bw, y + bh), (0, 0, 255), 3)
+            
+            # 添加文字标注
+            cv2.putText(contour_frame, f'Status: {status}', (x, y - 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            if wave_height > 0:
+                cv2.putText(contour_frame, f'Wave: {wave_height:.1f}mm ({wave_level})', 
+                           (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
         # --- 第九步：伪彩色热力图渲染 ---
         if status != "未检测到带钢":
