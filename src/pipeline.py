@@ -229,7 +229,14 @@ class Pipeline:
         start_time = time.time()
         
         # 浪形检测
-        heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data = self.detector.process_frame(frame)
+        heatmap, status, contour_frame, dehazed_frame = self.detector.process_frame(frame)
+        
+        # 为缺少的值提供默认值
+        algorithm_time = 0.0
+        wave_height = 0.0
+        wave_width = 0.0
+        wave_level = '无'
+        edge_data = None
         
         # 构建检测结果
         detection_result = {

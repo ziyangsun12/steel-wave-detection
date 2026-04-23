@@ -590,25 +590,25 @@
                                         <div class="video-container">
                                             <img id="rawVideo" src="" alt="原始视频">
                                             <div class="video-overlay">
-                                                <strong>原始监控视频</strong>
+                                                <strong>原始监控视频 (Ground Truth)</strong>
                                             </div>
                                         </div>
                                         <div class="video-container">
                                             <img id="dehazedVideo" src="" alt="去雾后的视频">
                                             <div class="video-overlay">
-                                                <strong>去雾预处理画面</strong>
+                                                <strong>背景物理隔离与去雾效果 (Valid Mask)</strong>
                                             </div>
                                         </div>
                                         <div class="video-container">
                                             <img id="contourVideo" src="" alt="轮廓提取后的视频">
                                             <div class="video-overlay">
-                                                <strong>轮廓提取与目标确认</strong>
+                                                <strong>带钢轮廓提取与浪形检测区域标定 (Contour & ROI)</strong>
                                             </div>
                                         </div>
                                         <div class="video-container">
                                             <img id="heatmapVideo" src="" alt="热力图">
                                             <div class="video-overlay">
-                                                <strong>轮廓高度热力图</strong>
+                                                <strong>带钢形貌伪色彩渲染 (3D Pseudo-color Rendering)</strong>
                                             </div>
                                         </div>
                                     </div>
@@ -688,22 +688,27 @@
                             </div>
                             
                             <div class="card">
-                                <div class="card-header">参数快速调节</div>
+                                <div class="card-header">算法参数实时整定控制台</div>
                                 <div class="card-body">
                                     <div class="slider-container">
-                                        <label for="omegaSlider">去雾强度</label>
-                                        <input type="range" id="omegaSlider" min="50" max="95" value="80">
-                                        <span class="slider-value" id="omegaValue">0.80</span>
+                                        <label for="defogSlider">去水雾强度</label>
+                                        <input type="range" id="defogSlider" min="0" max="30" value="5">
+                                        <span class="slider-value" id="defogValue">5</span>
                                     </div>
                                     <div class="slider-container">
-                                        <label for="t0Slider">透射率</label>
-                                        <input type="range" id="t0Slider" min="10" max="30" value="25">
-                                        <span class="slider-value" id="t0Value">0.25</span>
+                                        <label for="graySlider">轮廓提取灰度阈值</label>
+                                        <input type="range" id="graySlider" min="100" max="255" value="200">
+                                        <span class="slider-value" id="grayValue">200</span>
                                     </div>
                                     <div class="slider-container">
-                                        <label for="thresholdSlider">轮廓阈值</label>
-                                        <input type="range" id="thresholdSlider" min="100" max="150" value="120">
-                                        <span class="slider-value" id="thresholdValue">120</span>
+                                        <label for="trimSlider">浪形检测切除比例(%)</label>
+                                        <input type="range" id="trimSlider" min="0" max="30" value="15">
+                                        <span class="slider-value" id="trimValue">15%</span>
+                                    </div>
+                                    <div class="slider-container">
+                                        <label for="ampSlider">浪形检测报警阈值</label>
+                                        <input type="range" id="ampSlider" min="10" max="150" value="50">
+                                        <span class="slider-value" id="ampValue">5.0</span>
                                     </div>
                                     <button id="applyParamsBtn" class="btn btn-primary w-100 mt-3">应用参数</button>
                                 </div>
@@ -715,43 +720,33 @@
                 <!-- 参数配置 -->
                 <div id="parameters" class="tab-content">
                     <div class="card mb-4">
-                        <div class="card-header">算法参数配置</div>
+                        <div class="card-header">算法参数实时整定控制台</div>
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
                                     <h3>预处理参数</h3>
                                     <div class="slider-container">
-                                        <label for="dehazeOmega">去雾强度 (omega)</label>
-                                        <input type="range" id="dehazeOmega" min="50" max="95" value="80">
-                                        <span class="slider-value" id="dehazeOmegaValue">0.80</span>
+                                        <label for="defogStrength">去水雾强度</label>
+                                        <input type="range" id="defogStrength" min="0" max="30" value="5">
+                                        <span class="slider-value" id="defogStrengthValue">5</span>
                                     </div>
                                     <div class="slider-container">
-                                        <label for="dehazeT0">透射率 (t0)</label>
-                                        <input type="range" id="dehazeT0" min="10" max="30" value="25">
-                                        <span class="slider-value" id="dehazeT0Value">0.25</span>
-                                    </div>
-                                    <div class="slider-container">
-                                        <label for="contrastAlpha">对比度增强 (alpha)</label>
-                                        <input type="range" id="contrastAlpha" min="100" max="300" value="150">
-                                        <span class="slider-value" id="contrastAlphaValue">1.50</span>
+                                        <label for="grayThreshold">轮廓提取灰度阈值</label>
+                                        <input type="range" id="grayThreshold" min="100" max="255" value="200">
+                                        <span class="slider-value" id="grayThresholdValue">200</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h3>检测参数</h3>
                                     <div class="slider-container">
-                                        <label for="waveThreshold">浪形检测阈值</label>
-                                        <input type="range" id="waveThreshold" min="2" max="10" value="4.5" step="0.1">
-                                        <span class="slider-value" id="waveThresholdValue">4.5</span>
+                                        <label for="trimRatio">浪形检测切除比例(%)</label>
+                                        <input type="range" id="trimRatio" min="0" max="30" value="15">
+                                        <span class="slider-value" id="trimRatioValue">15%</span>
                                     </div>
                                     <div class="slider-container">
-                                        <label for="historyFrames">历史帧数</label>
-                                        <input type="range" id="historyFrames" min="5" max="30" value="15">
-                                        <span class="slider-value" id="historyFramesValue">15</span>
-                                    </div>
-                                    <div class="slider-container">
-                                        <label for="contourThreshold">轮廓提取阈值</label>
-                                        <input type="range" id="contourThreshold" min="100" max="150" value="120">
-                                        <span class="slider-value" id="contourThresholdValue">120</span>
+                                        <label for="waveThreshold">浪形检测报警阈值</label>
+                                        <input type="range" id="waveThreshold" min="10" max="150" value="50">
+                                        <span class="slider-value" id="waveThresholdValue">5.0</span>
                                     </div>
                                 </div>
                             </div>
@@ -761,51 +756,9 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="card">
-                        <div class="card-header">高级优化设置</div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h3>图像处理优化</h3>
-                                    <div class="form-group mb-3">
-                                        <label for="blurKernel" class="form-label">高斯模糊核大小</label>
-                                        <select class="form-select" id="blurKernel" style="background-color: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                                            <option value="3">3x3</option>
-                                            <option value="5" selected>5x5</option>
-                                            <option value="7">7x7</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group mb-3">
-                                        <label for="morphKernel" class="form-label">形态学操作核大小</label>
-                                        <select class="form-select" id="morphKernel" style="background-color: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                                            <option value="5">5x5</option>
-                                            <option value="10" selected>10x10</option>
-                                            <option value="15">15x15</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <h3>算法优化</h3>
-                                    <div class="form-group mb-3">
-                                        <label for="edgeSmoothing" class="form-label">边缘平滑窗口大小</label>
-                                        <input type="range" id="edgeSmoothing" min="5" max="31" value="21" step="2" class="form-range">
-                                        <span class="slider-value" id="edgeSmoothingValue">21</span>
-                                    </div>
-                                    <div class="form-group mb-3">
-                                        <label for="roiMargin" class="form-label">ROI边缘预留</label>
-                                        <input type="range" id="roiMargin" min="10" max="50" value="30" class="form-range">
-                                        <span class="slider-value" id="roiMarginValue">30</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mt-4">
-                                <button id="saveAdvancedBtn" class="btn btn-primary">保存高级设置</button>
-                                <button id="resetAdvancedBtn" class="btn btn-danger">重置默认</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
+                
+
                 
                 <!-- 历史日志 -->
                 <div id="history" class="tab-content">
@@ -1474,55 +1427,174 @@
             currentFrame.textContent = frameIndex;
         }
         
-        // 滑块值更新
-        const omegaSlider = document.getElementById('omegaSlider');
-        if (omegaSlider) {
-            omegaSlider.addEventListener('input', function() {
-                const value = this.value / 100;
-                const omegaValue = document.getElementById('omegaValue');
-                if (omegaValue) {
-                    omegaValue.textContent = value.toFixed(2);
-                }
-            });
-        }
+
         
-        const t0Slider = document.getElementById('t0Slider');
-        if (t0Slider) {
-            t0Slider.addEventListener('input', function() {
-                const value = this.value / 100;
-                const t0Value = document.getElementById('t0Value');
-                if (t0Value) {
-                    t0Value.textContent = value.toFixed(2);
-                }
-            });
-        }
-        
-        const thresholdSlider = document.getElementById('thresholdSlider');
-        if (thresholdSlider) {
-            thresholdSlider.addEventListener('input', function() {
-                const thresholdValue = document.getElementById('thresholdValue');
-                if (thresholdValue) {
-                    thresholdValue.textContent = this.value;
-                }
-            });
-        }
-        
-        // 应用参数
-        const applyParamsBtn = document.getElementById('applyParamsBtn');
-        if (applyParamsBtn) {
-            applyParamsBtn.addEventListener('click', function() {
-                const omegaSlider = document.getElementById('omegaSlider');
-                const t0Slider = document.getElementById('t0Slider');
-                const thresholdSlider = document.getElementById('thresholdSlider');
-                
-                if (omegaSlider && t0Slider && thresholdSlider) {
-                    const omega = omegaSlider.value / 100;
-                    const t0 = t0Slider.value / 100;
-                    const threshold = thresholdSlider.value;
+        // 初始化参数配置
+        function initParameters() {
+            // 加载当前参数
+            fetch('/api/get_parameters')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const params = data.data;
+                        // 更新参数值
+                        document.getElementById('defogStrength').value = params.defog_strength || 5;
+                        document.getElementById('defogStrengthValue').textContent = params.defog_strength || 5;
+                        document.getElementById('grayThreshold').value = params.gray_threshold || 200;
+                        document.getElementById('grayThresholdValue').textContent = params.gray_threshold || 200;
+                        document.getElementById('trimRatio').value = params.trim_ratio || 15;
+                        document.getElementById('trimRatioValue').textContent = (params.trim_ratio || 15) + '%';
+                        document.getElementById('waveThreshold').value = (params.wave_amplitude_threshold || 5.0) * 10;
+                        document.getElementById('waveThresholdValue').textContent = (params.wave_amplitude_threshold || 5.0).toFixed(1);
+                        
+                        // 更新快速调节参数
+                        document.getElementById('defogSlider').value = params.defog_strength || 5;
+                        document.getElementById('defogValue').textContent = params.defog_strength || 5;
+                        document.getElementById('graySlider').value = params.gray_threshold || 200;
+                        document.getElementById('grayValue').textContent = params.gray_threshold || 200;
+                        document.getElementById('trimSlider').value = params.trim_ratio || 15;
+                        document.getElementById('trimValue').textContent = (params.trim_ratio || 15) + '%';
+                        document.getElementById('ampSlider').value = (params.wave_amplitude_threshold || 5.0) * 10;
+                        document.getElementById('ampValue').textContent = (params.wave_amplitude_threshold || 5.0).toFixed(1);
+                    } else {
+                        // 使用默认值
+                        document.getElementById('defogStrength').value = 5;
+                        document.getElementById('defogStrengthValue').textContent = 5;
+                        document.getElementById('grayThreshold').value = 200;
+                        document.getElementById('grayThresholdValue').textContent = 200;
+                        document.getElementById('trimRatio').value = 15;
+                        document.getElementById('trimRatioValue').textContent = '15%';
+                        document.getElementById('waveThreshold').value = 50;
+                        document.getElementById('waveThresholdValue').textContent = '5.0';
+                        
+                        document.getElementById('defogSlider').value = 5;
+                        document.getElementById('defogValue').textContent = 5;
+                        document.getElementById('graySlider').value = 200;
+                        document.getElementById('grayValue').textContent = 200;
+                        document.getElementById('trimSlider').value = 15;
+                        document.getElementById('trimValue').textContent = '15%';
+                        document.getElementById('ampSlider').value = 50;
+                        document.getElementById('ampValue').textContent = '5.0';
+                    }
+                })
+                .catch(error => {
+                    // 使用默认值
+                    document.getElementById('defogStrength').value = 5;
+                    document.getElementById('defogStrengthValue').textContent = 5;
+                    document.getElementById('grayThreshold').value = 200;
+                    document.getElementById('grayThresholdValue').textContent = 200;
+                    document.getElementById('trimRatio').value = 15;
+                    document.getElementById('trimRatioValue').textContent = '15%';
+                    document.getElementById('waveThreshold').value = 50;
+                    document.getElementById('waveThresholdValue').textContent = '5.0';
                     
-                    // 这里可以添加参数应用逻辑
-                    alert('参数已应用: omega=' + omega + ', t0=' + t0 + ', threshold=' + threshold);
-                }
+                    document.getElementById('defogSlider').value = 5;
+                    document.getElementById('defogValue').textContent = 5;
+                    document.getElementById('graySlider').value = 200;
+                    document.getElementById('grayValue').textContent = 200;
+                    document.getElementById('trimSlider').value = 15;
+                    document.getElementById('trimValue').textContent = '15%';
+                    document.getElementById('ampSlider').value = 50;
+                    document.getElementById('ampValue').textContent = '5.0';
+                });
+            
+            // 绑定参数滑块事件
+            document.getElementById('defogStrength').addEventListener('input', function() {
+                document.getElementById('defogStrengthValue').textContent = this.value;
+            });
+            
+            document.getElementById('grayThreshold').addEventListener('input', function() {
+                document.getElementById('grayThresholdValue').textContent = this.value;
+            });
+            
+            document.getElementById('trimRatio').addEventListener('input', function() {
+                document.getElementById('trimRatioValue').textContent = this.value + '%';
+            });
+            
+            document.getElementById('waveThreshold').addEventListener('input', function() {
+                document.getElementById('waveThresholdValue').textContent = (this.value / 10).toFixed(1);
+            });
+            
+            // 绑定快速调节滑块事件
+            document.getElementById('defogSlider').addEventListener('input', function() {
+                document.getElementById('defogValue').textContent = this.value;
+            });
+            
+            document.getElementById('graySlider').addEventListener('input', function() {
+                document.getElementById('grayValue').textContent = this.value;
+            });
+            
+            document.getElementById('trimSlider').addEventListener('input', function() {
+                document.getElementById('trimValue').textContent = this.value + '%';
+            });
+            
+            document.getElementById('ampSlider').addEventListener('input', function() {
+                document.getElementById('ampValue').textContent = (this.value / 10).toFixed(1);
+            });
+            
+            // 绑定保存参数按钮事件
+            document.getElementById('saveParamsBtn').addEventListener('click', function() {
+                const params = {
+                    defog_strength: parseInt(document.getElementById('defogStrength').value),
+                    gray_threshold: parseInt(document.getElementById('grayThreshold').value),
+                    trim_ratio: parseInt(document.getElementById('trimRatio').value),
+                    wave_amplitude_threshold: parseFloat(document.getElementById('waveThreshold').value) / 10
+                };
+                
+                fetch('/api/set_parameters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(params)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('参数保存成功');
+                    } else {
+                        alert('参数保存失败: ' + data.message);
+                    }
+                });
+            });
+            
+            // 绑定应用参数按钮事件
+            document.getElementById('applyParamsBtn').addEventListener('click', function() {
+                const params = {
+                    defog_strength: parseInt(document.getElementById('defogSlider').value),
+                    gray_threshold: parseInt(document.getElementById('graySlider').value),
+                    trim_ratio: parseInt(document.getElementById('trimSlider').value),
+                    wave_amplitude_threshold: parseFloat(document.getElementById('ampSlider').value) / 10
+                };
+                
+                fetch('/api/set_parameters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(params)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('参数应用成功');
+                    } else {
+                        alert('参数应用失败: ' + data.message);
+                    }
+                });
+            });
+            
+            // 绑定重置参数按钮事件
+            document.getElementById('resetParamsBtn').addEventListener('click', function() {
+                // 重置为默认值
+                document.getElementById('defogStrength').value = 5;
+                document.getElementById('defogStrengthValue').textContent = 5;
+                document.getElementById('grayThreshold').value = 150;
+                document.getElementById('grayThresholdValue').textContent = 150;
+                document.getElementById('trimRatio').value = 15;
+                document.getElementById('trimRatioValue').textContent = '15%';
+                document.getElementById('waveThreshold').value = 50;
+                document.getElementById('waveThresholdValue').textContent = '5.0';
             });
         }
         
@@ -1531,6 +1603,7 @@
             // 确保DOM元素加载完成后再调用这些函数
             updateStatus();
             loadVideoFiles();
+            initParameters();
         };
     </script>
 </body>

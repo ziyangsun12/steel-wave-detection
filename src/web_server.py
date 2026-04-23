@@ -8,15 +8,15 @@ import numpy as np
 import time
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response
 
-# 添加当前目录到导入路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 获取项目根目录
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 添加项目根目录到导入路径
+sys.path.append(project_root)
 
 # 使用绝对导入
 from src.pipeline import Pipeline
 from src.wave_detector import WaveDetector
-
-# 获取项目根目录
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__, 
             template_folder=os.path.join(project_root, 'web', 'templates'),
@@ -37,16 +37,103 @@ results_last_updated = 0
 
 # 缓存最新的帧信息
 latest_frame_info = {
-    'raw_frame': None,
-    'dehazed_frame': None,
-    'contour_frame': None,
-    'heatmap_frame': None,
     'status': '未检测到带钢',
     'algorithm_time': 0,
     'wave_height': 0,
     'wave_width': 0,
     'wave_level': '无'
 }
+
+# 后台线程更新检测结果
+import threading
+
+def update_frame_info():
+    """后台线程定期更新帧信息"""
+    global config, current_frame_index, total_frames, latest_frame_info, is_playing
+    
+    # 只输出一次启动信息
+    print("后台线程已启动，开始更新帧信息...")
+    
+    while True:
+        try:
+            # 当config为None时，不输出任何信息
+            if config is None:
+                time.sleep(0.1)  # 每100ms检查一次
+                continue
+            
+            # 当config不是字典或缺少必要键时，不输出信息
+            if not isinstance(config, dict) or 'camera' not in config or not isinstance(config['camera'], dict) or 'video_path' not in config['camera']:
+                time.sleep(0.1)  # 每100ms检查一次
+                continue
+            
+            # 只有在config有效时才进行处理
+            video_path = config['camera']['video_path']
+            if not video_path:
+                time.sleep(0.1)  # 每100ms检查一次
+                continue
+            
+            # 创建WaveDetector实例并使用config中的参数
+            detector = WaveDetector()
+            if 'detector' in config and isinstance(config['detector'], dict):
+                detector.gray_threshold = config['detector'].get('gray_threshold', 150)
+                detector.wave_amplitude_threshold = config['detector'].get('wave_amplitude_threshold', 4.5)
+                detector.trim_ratio = config['detector'].get('trim_ratio', 0.15)
+                detector.defog_strength = config['detector'].get('defog_strength', 5)
+            
+            # 创建新的视频捕获对象
+            cap_local = cv2.VideoCapture(video_path)
+            
+            if cap_local and cap_local.isOpened():
+                # 确保total_frames和current_frame_index被正确初始化
+                if total_frames is None or total_frames == 0:
+                    total_frames = int(cap_local.get(cv2.CAP_PROP_FRAME_COUNT))
+                    current_frame_index = 0
+                
+                # 设置视频帧位置
+                cap_local.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
+                ret, frame = cap_local.read()
+                
+                if ret:
+                    # 处理帧
+                    start_time = time.time()
+                    heatmap, status, annotated_frame, defogged_show = detector.process_frame(frame)
+                    process_time = time.time() - start_time
+                    
+                    # 为缺少的值提供默认值
+                    algorithm_time = process_time * 1000  # 转换为毫秒
+                    wave_height = 0.0
+                    wave_width = 0.0
+                    wave_level = '无'
+                    
+                    # 更新最新帧信息
+                    latest_frame_info.update({
+                        'status': status,
+                        'algorithm_time': algorithm_time,
+                        'wave_height': wave_height,
+                        'wave_width': wave_width,
+                        'wave_level': wave_level
+                    })
+                    
+                    # 只有在播放状态下才增加帧索引
+                    if is_playing:
+                        current_frame_index = (current_frame_index + 1) % total_frames
+                
+                # 释放视频捕获对象
+                cap_local.release()
+            
+            # 控制更新频率
+            time.sleep(0.1)  # 每100ms更新一次
+        except Exception as e:
+            # 只在发生错误时输出信息
+            print(f"后台更新帧信息错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(0.1)
+            continue
+
+# 启动后台线程
+update_thread = threading.Thread(target=update_frame_info, daemon=True)
+update_thread.start()
 
 
 @app.route('/')
@@ -59,6 +146,8 @@ def index():
 def start_detection():
     """开始检测"""
     global pipeline, config, cap, current_frame_index, total_frames, fps
+    # 确保config是全局变量
+    global config
     
     data = request.json
     video_path = data.get('video_path')
@@ -288,7 +377,14 @@ def analyze_frame():
         
         # 浪形检测
         detector = WaveDetector()
-        heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data = detector.process_frame(frame)
+        heatmap, status, contour_frame, dehazed_frame = detector.process_frame(frame)
+        
+        # 为缺少的值提供默认值
+        algorithm_time = 0.0
+        wave_height = 0.0
+        wave_width = 0.0
+        wave_level = '无'
+        edge_data = None
         
         # 构建结果
         result = {
@@ -348,91 +444,109 @@ def get_video_info():
 
 def generate_frame(frame_type):
     """生成视频帧"""
-    global config, current_frame_index, total_frames, latest_frame_info, is_playing
-    
-    detector = WaveDetector()
+    global config, current_frame_index, total_frames, latest_frame_info, is_playing, cap
     
     while True:
-        if not config or not config.get('camera') or not config['camera'].get('video_path'):
-            # 发送空帧
-            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
-            continue
-        
-        # 创建新的视频捕获对象
-        video_path = config['camera']['video_path']
-        cap = cv2.VideoCapture(video_path)
-        
-        if not cap or not cap.isOpened():
-            # 发送空帧
-            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
-            continue
-        
-        # 设置视频帧位置
-        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
-        ret, frame = cap.read()
-        
-        if not ret:
-            # 视频结束，重置到开始
-            current_frame_index = 0
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = cap.read()
-            if not ret:
-                # 释放视频捕获对象
-                cap.release()
+        try:
+            if not config or not config.get('camera') or not config['camera'].get('video_path'):
+                # 发送空帧
                 yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                time.sleep(0.1)  # 避免CPU占用过高
                 continue
-        
-        # 处理帧
-        start_time = time.time()
-        heatmap, status, algorithm_time, dehazed_frame, contour_frame, wave_height, wave_width, wave_level, edge_data = detector.process_frame(frame)
-        process_time = time.time() - start_time
-        
-        # 更新最新帧信息
-        latest_frame_info.update({
-            'raw_frame': frame,
-            'dehazed_frame': dehazed_frame,
-            'contour_frame': contour_frame,
-            'heatmap_frame': heatmap,
-            'status': status,
-            'algorithm_time': algorithm_time,
-            'wave_height': wave_height,
-            'wave_width': wave_width,
-            'wave_level': wave_level
-        })
-        
-        # 根据帧类型选择要发送的帧
-        if frame_type == 'raw':
-            frame_to_send = frame
-        elif frame_type == 'dehazed':
-            frame_to_send = dehazed_frame
-        elif frame_type == 'contour':
-            frame_to_send = contour_frame
-        elif frame_type == 'heatmap':
-            frame_to_send = heatmap
-        else:
-            frame_to_send = frame
-        
-        # 编码为JPEG
-        ret, buffer = cv2.imencode('.jpg', frame_to_send)
-        if not ret:
+            
+            # 创建WaveDetector实例并使用config中的参数
+            detector = WaveDetector()
+            if config and config.get('detector'):
+                detector.gray_threshold = config['detector'].get('gray_threshold', 150)
+                detector.wave_amplitude_threshold = config['detector'].get('wave_amplitude_threshold', 4.5)
+                detector.trim_ratio = config['detector'].get('trim_ratio', 0.15)
+                detector.defog_strength = config['detector'].get('defog_strength', 5)
+            
+            # 创建新的视频捕获对象
+            video_path = config['camera']['video_path']
+            cap_local = cv2.VideoCapture(video_path)
+            
+            if not cap_local or not cap_local.isOpened():
+                # 发送空帧
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                time.sleep(0.1)
+                continue
+            
+            # 设置视频帧位置
+            cap_local.set(cv2.CAP_PROP_POS_FRAMES, current_frame_index)
+            ret, frame = cap_local.read()
+            
+            if not ret:
+                # 视频结束，重置到开始
+                current_frame_index = 0
+                cap_local.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = cap_local.read()
+                if not ret:
+                    # 释放视频捕获对象
+                    cap_local.release()
+                    yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                    time.sleep(0.1)
+                    continue
+            
+            # 处理帧
+            start_time = time.time()
+            heatmap, status, annotated_frame, defogged_show = detector.process_frame(frame)
+            process_time = time.time() - start_time
+            
+            # 为缺少的值提供默认值
+            algorithm_time = process_time * 1000  # 转换为毫秒
+            wave_height = 0.0
+            wave_width = 0.0
+            wave_level = '无'
+            
+            # 更新最新帧信息（只包含可序列化的对象）
+            latest_frame_info.update({
+                'status': status,
+                'algorithm_time': algorithm_time,
+                'wave_height': wave_height,
+                'wave_width': wave_width,
+                'wave_level': wave_level
+            })
+            
+            # 根据帧类型选择要发送的帧
+            if frame_type == 'raw':
+                frame_to_send = frame
+            elif frame_type == 'dehazed':
+                frame_to_send = defogged_show
+            elif frame_type == 'contour':
+                frame_to_send = annotated_frame
+            elif frame_type == 'heatmap':
+                frame_to_send = heatmap
+            else:
+                frame_to_send = frame
+            
+            # 编码为JPEG
+            ret, buffer = cv2.imencode('.jpg', frame_to_send)
+            
             # 释放视频捕获对象
-            cap.release()
+            cap_local.release()
+            
+            if not ret:
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+                time.sleep(0.1)
+                continue
+            
+            # 发送帧
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            
+            # 只有在播放状态下才增加帧索引
+            if is_playing:
+                current_frame_index = (current_frame_index + 1) % total_frames
+            
+            # 控制帧率
+            time.sleep(0.033)  # 约30fps
+        except Exception as e:
+            print(f"视频流处理错误: {str(e)}")
+            # 发送空帧
             yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + b'\r\n')
+            time.sleep(0.1)
             continue
-        
-        # 发送帧
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
-        # 释放视频捕获对象
-        cap.release()
-        
-        # 只有在播放状态下才增加帧索引
-        if is_playing:
-            current_frame_index = (current_frame_index + 1) % total_frames
-        
-        # 控制帧率
-        time.sleep(0.033)  # 约30fps
 
 
 @app.route('/video/raw')
@@ -537,6 +651,49 @@ def update_params():
         return jsonify({'status': 'success', 'message': '参数已更新', 'params': {'omega': omega, 't0': t0, 'binary_threshold': binary_threshold}})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'更新参数失败: {str(e)}'})
+
+@app.route('/api/set_parameters', methods=['POST'])
+def set_parameters():
+    """设置参数"""
+    global config
+    
+    try:
+        params = request.json
+        
+        # 更新配置
+        if 'defog_strength' in params:
+            config['detector']['defog_strength'] = params['defog_strength']
+        if 'gray_threshold' in params:
+            config['detector']['gray_threshold'] = params['gray_threshold']
+        if 'trim_ratio' in params:
+            config['detector']['trim_ratio'] = params['trim_ratio'] / 100.0  # 转换为小数
+        if 'wave_amplitude_threshold' in params:
+            config['detector']['wave_amplitude_threshold'] = params['wave_amplitude_threshold']
+        
+        # 保存配置到文件
+        with open('config.json', 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'status': 'success', 'message': '参数设置成功'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'参数设置失败: {str(e)}'})
+
+@app.route('/api/get_parameters', methods=['GET'])
+def get_parameters():
+    """获取当前参数"""
+    global config
+    
+    try:
+        params = {
+            'defog_strength': config['detector'].get('defog_strength', 5),
+            'gray_threshold': config['detector'].get('gray_threshold', 150),
+            'trim_ratio': config['detector'].get('trim_ratio', 0.15) * 100,  # 转换为百分比
+            'wave_amplitude_threshold': config['detector'].get('wave_amplitude_threshold', 5.0)
+        }
+        
+        return jsonify({'status': 'success', 'data': params})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'获取参数失败: {str(e)}'})
 
 
 @app.route('/static/<path:path>')

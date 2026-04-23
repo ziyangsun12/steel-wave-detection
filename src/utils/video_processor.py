@@ -2,7 +2,7 @@ import cv2
 import os
 import json
 from datetime import datetime
-from src.wave_detector import WaveDetector
+from src.wave_detector1 import WaveDetector
 
 class VideoProcessor:
     def __init__(self):
