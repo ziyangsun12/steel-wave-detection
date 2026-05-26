@@ -14,9 +14,19 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 添加项目根目录到导入路径
 sys.path.append(project_root)
 
+# 添加当前目录到导入路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
 # 使用绝对导入
-from src.pipeline import Pipeline
-from src.wave_detector import WaveDetector
+try:
+    from src.pipeline import Pipeline
+    from src.wave_detector import WaveDetector
+    from src.utils import Utils
+except ImportError:
+    from pipeline import Pipeline
+    from wave_detector import WaveDetector
+    from utils import Utils
 
 app = Flask(__name__, 
             template_folder=os.path.join(project_root, 'web', 'templates'),
