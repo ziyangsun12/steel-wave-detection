@@ -47,11 +47,14 @@
 │   └── config.yaml   # 主配置文件
 ├── install/          # 可执行文件目录
 │   └── steel_wave_detection.exe  # 独立可执行文件（无需Python环境）
+├── output/           # 检测结果输出目录
+│   ├── detection_results.csv   # 检测结果CSV文件
+│   ├── detection_results.json  # 检测结果JSON文件
 ├── src/              # 核心源代码
 │   ├── utils/        # 工具函数
 │   │   └── video_processor.py  # 视频处理工具
 │   ├── __init__.py
-│   ├── pipeline.py          # 实时处理管道
+│   ├── pipeline.py          # 实时处理管道（负责数据输出）
 │   ├── wave_detector.py     # 浪形检测模块
 │   └── web_server.py        # Web服务器模块
 ├── web/              # Web界面目录
@@ -59,10 +62,10 @@
 │       └── index.html       # 主页面
 ├── .gitignore        # Git忽略文件
 ├── README.md         # 项目说明
+├── analyse_data_from_csv.py  # 数据分析工具脚本
 ├── debug.log         # 调试日志
 ├── main.py           # 桌面应用程序入口
-├── main_run.py       # 桌面应用程序运行脚本（推荐使用）
-├── page_content.html # 页面内容
+├── main_adjust.py    # 调整后的桌面应用程序
 ├── requirements.txt  # 依赖列表
 └── run_web.py        # Web服务器启动脚本
 ```
@@ -107,8 +110,8 @@ pip install -r requirements.txt
 ### 桌面应用程序（推荐）
 
 ```bash
-# 运行桌面应用程序（推荐使用main_run.py）
-python main_run.py
+# 运行桌面应用程序（推荐使用main_adjust.py）
+python main_adjust.py
 
 # 或者使用main.py
 python main.py
@@ -138,6 +141,58 @@ install/steel_wave_detection.exe
 ```
 
 **注意**：`install/steel_wave_detection.exe` 是一个独立的可执行文件，无需安装Python环境即可运行。它包含了所有必要的依赖库，可以直接在Windows系统上运行。
+
+### 数据分析工具
+
+```bash
+# 运行数据分析脚本
+python analyse_data_from_csv.py
+```
+
+**功能说明**：
+- 读取 `output/detection_results.csv` 文件中的检测数据
+- 将Unix时间戳转换为北京时间(UTC+8)
+- 统计浪形出现的帧数、类型分布、等级分布
+- 计算浪高/浪宽的统计信息（平均值、最大值、最小值等）
+- 生成分析报告到 `output/wave_analysis_report.txt`
+- 导出浪形事件到 `output/wave_events.csv`
+
+**输出文件**：
+- `output/detection_results.csv`：检测系统运行时自动生成的检测结果
+- `output/wave_events.csv`：筛选出的浪形事件记录
+- `output/wave_analysis_report.txt`：详细的分析报告
+
+## 数据输出
+
+检测系统运行时会自动生成以下输出文件：
+
+### 输出文件说明
+
+| 文件 | 说明 | 生成位置 |
+|------|------|----------|
+| `detection_results.csv` | 完整的检测结果记录（时间戳、浪形类型、等级、浪高、浪宽等） | `output/` |
+| `detection_results.json` | JSON格式的检测结果记录 | `output/` |
+
+### 数据字段说明
+
+CSV文件包含以下字段：
+- `timestamp`：Unix时间戳（秒）
+- `wave_type`：浪形类型（平直、双边浪、DS单边浪、WS单边浪等）
+- `wave_level`：浪形等级（无、低、中、高、严重）
+- `wave_height`：浪高（mm）
+- `wave_width`：浪宽（mm）
+- `wave_position_x`：浪形X坐标（mm）
+- `wave_position_y`：浪形Y坐标（mm）
+
+### 数据流向
+
+```
+视频输入 → 检测算法处理 → 检测结果 → CSV/JSON文件
+                                          ↓
+                              数据分析工具 (analyse_data_from_csv.py)
+                                          ↓
+                              分析报告 + 浪形事件CSV
+```
 
 ## Web界面功能
 
@@ -197,7 +252,7 @@ install/steel_wave_detection.exe
 python run_web.py
 
 # 运行桌面应用程序进行功能测试
-python main.py
+python main_adjust.py
 ```
 
 ### 性能测试
@@ -222,7 +277,7 @@ python main.py
 
 ## 联系方式
 
-- Author: ziyangsun12
+- Author: ziyangsun12, GettingVia et al
 - Email: ziyangsun@sjtu.edu.cn
 - Project URL: https://github.com/ziyangsun12/steel-wave-detection
 

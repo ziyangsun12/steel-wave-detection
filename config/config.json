@@ -1,7 +1,7 @@
 {
   "camera": {
     "type": "local",
-    "video_path": "D:\\博一下课程学习\\工业软件技术与应用\\data/4-5/F4_无明显浪形.mp4",
+    "video_path": "data/无浪形视频.mp4",
     "fps": 30,
     "resolution": [
       1280,
@@ -45,11 +45,10 @@
     "max_frames": 1000,
     "batch_size": 1
   },
-  "label": "F4_无明显浪形",
   "detector": {
     "defog_strength": 5,
     "gray_threshold": 150,
     "trim_ratio": 0.15,
-    "wave_amplitude_threshold": 9.2
+    "wave_amplitude_threshold": 9.6
   }
 }
