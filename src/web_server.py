@@ -660,6 +660,19 @@ def set_parameters():
     try:
         params = request.json
         
+        # 确保config已初始化，如果未初始化则从配置文件加载
+        if config is None:
+            config_path = os.path.join(project_root, 'config', 'config.yaml')
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            if config is None:
+                return jsonify({'status': 'error', 'message': '配置文件加载失败'})
+        
+        # 确保config中包含detector配置
+        if 'detector' not in config or not isinstance(config['detector'], dict):
+            config['detector'] = {}
+        
         # 更新配置
         if 'defog_strength' in params:
             config['detector']['defog_strength'] = params['defog_strength']
@@ -671,7 +684,8 @@ def set_parameters():
             config['detector']['wave_amplitude_threshold'] = params['wave_amplitude_threshold']
         
         # 保存配置到文件
-        with open('config.json', 'w', encoding='utf-8') as f:
+        config_json_path = os.path.join(project_root, 'config', 'config.json')
+        with open(config_json_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         
         return jsonify({'status': 'success', 'message': '参数设置成功'})
@@ -684,12 +698,21 @@ def get_parameters():
     global config
     
     try:
-        params = {
-            'defog_strength': config['detector'].get('defog_strength', 5),
-            'gray_threshold': config['detector'].get('gray_threshold', 150),
-            'trim_ratio': config['detector'].get('trim_ratio', 0.15) * 100,  # 转换为百分比
-            'wave_amplitude_threshold': config['detector'].get('wave_amplitude_threshold', 5.0)
-        }
+        # 如果config未初始化，使用默认参数
+        if config is None or not isinstance(config, dict) or 'detector' not in config or not isinstance(config['detector'], dict):
+            params = {
+                'defog_strength': 5,
+                'gray_threshold': 150,
+                'trim_ratio': 15,  # 百分比形式
+                'wave_amplitude_threshold': 5.0
+            }
+        else:
+            params = {
+                'defog_strength': config['detector'].get('defog_strength', 5),
+                'gray_threshold': config['detector'].get('gray_threshold', 150),
+                'trim_ratio': config['detector'].get('trim_ratio', 0.15) * 100,  # 转换为百分比
+                'wave_amplitude_threshold': config['detector'].get('wave_amplitude_threshold', 5.0)
+            }
         
         return jsonify({'status': 'success', 'data': params})
     except Exception as e:

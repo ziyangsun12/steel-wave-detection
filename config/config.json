@@ -1,0 +1,55 @@
+{
+  "camera": {
+    "type": "local",
+    "video_path": "D:\\博一下课程学习\\工业软件技术与应用\\data/4-5/F4_无明显浪形.mp4",
+    "fps": 30,
+    "resolution": [
+      1280,
+      720
+    ]
+  },
+  "pipeline": {
+    "preprocessing": true,
+    "detection": true,
+    "visualization": true,
+    "save_results": true
+  },
+  "preprocessing": {
+    "dehazing": true,
+    "denoising": true,
+    "resize": [
+      640,
+      480
+    ]
+  },
+  "detection": {
+    "threshold": 0.5,
+    "min_area": 100,
+    "max_area": 10000
+  },
+  "visualization": {
+    "show_raw": true,
+    "show_dehazed": true,
+    "show_contour": true,
+    "show_heatmap": true,
+    "show_results": true
+  },
+  "save": {
+    "enabled": true,
+    "path": "results/",
+    "format": "json"
+  },
+  "system": {
+    "debug": false,
+    "log_level": "info",
+    "max_frames": 1000,
+    "batch_size": 1
+  },
+  "label": "F4_无明显浪形",
+  "detector": {
+    "defog_strength": 5,
+    "gray_threshold": 150,
+    "trim_ratio": 0.15,
+    "wave_amplitude_threshold": 9.2
+  }
+}
